@@ -48,7 +48,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 | 401 | 로그인 필요 | `Login required.` |
 | 403 | 권한 없음 | `Administrator access required.` |
 | 404 | 대상 없음 | `Center not found.` |
-| 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.` |
+| 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
 | 500 | 서버 내부 오류 | `Internal server error.` |
 | 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-03).` |
 
@@ -245,10 +245,70 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 ## 직원 계정 (FR-10)
 
-아래 API는 자리만 있고 현재 **501**을 응답합니다.
+직원 API는 모두 **Admin** 전용입니다. 그래서 직원은 자기 배정 센터를 바꿀 수 없습니다 (FR-10).
 
-| API | 권한 | 내용 |
-|-----|------|------|
-| `GET /api/staff` | Admin | 직원 목록 |
-| `POST /api/staff` | Admin | 직원 계정 생성 + 센터 배정 |
-| `PUT /api/staff/:id` | Admin | 직원 정보 / 배정 센터 변경 |
+### Staff 객체
+
+로그인 응답과 같은 모양입니다. 비밀번호 해시는 절대 포함되지 않습니다 (SRS 3.1).
+
+```json
+{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3 }
+```
+
+| 필드 | 타입 | 규칙 |
+|------|------|------|
+| `id` | number | 서버가 부여 |
+| `email` | string | 로그인 ID. 이메일 형식, 최대 255자, 중복 불가(대소문자 구분 없음). 생성 후 변경 불가 |
+| `password` | string | **요청 전용.** 8~72자. bcrypt 해시로 저장 |
+| `displayName` | string | 앞뒤 공백 제거 후 1~100자 |
+| `role` | `"Staff"` \| `"Administrator"` | **응답 전용.** 이 API로 만든 계정은 항상 `Staff` |
+| `centerId` | number \| null | 배정 센터. `Staff`는 필수이며 삭제되지 않은 센터여야 함. 관리자는 `null` |
+
+- 비밀번호 길이 규칙(8~72자)은 SRS에 정의되어 있지 않습니다. 최소값은 `create-admin` 스크립트와 맞췄고, 72는 bcrypt의 입력 한계입니다.
+- 관리자 계정은 이 API가 아니라 `npm run create-admin`으로 만듭니다 (README 참고).
+- 직원 계정 비활성화·삭제는 아직 구현되지 않았습니다.
+
+### `GET /api/staff` — Admin
+
+관리자를 포함한 모든 계정. 역할(`Staff` 먼저) → 표시 이름 순으로 정렬. **200** + `Staff[]`
+
+| 실패 | 경우 |
+|------|------|
+| 401 / 403 | 로그인 안 함 / 관리자가 아님 |
+
+### `POST /api/staff` — Admin
+
+살아 있는 센터 하나에 배정된 `Staff` 계정을 만듭니다.
+
+```json
+{ "email": "kim@example.com", "password": "********", "displayName": "Kim", "centerId": 2 }
+```
+
+**201** + 생성된 `Staff`. 요청에 `role`을 넣어도 무시됩니다.
+
+| 실패 | 경우 |
+|------|------|
+| 400 | 입력값 오류, 또는 `centerId`가 살아 있는 센터가 아님 (`centerId: Center not found or deleted.`) |
+| 401 / 403 | 로그인 안 함 / 관리자가 아님 |
+| 409 | 이미 다른 계정이 쓰는 이메일 (`email: This email is already in use.`) |
+
+### `PUT /api/staff/:id` — Admin
+
+직원의 이름을 바꾸거나, 다른 살아 있는 센터로 옮기거나, 비밀번호를 재설정합니다(선택). `Staff` 계정만 수정할 수 있고, 관리자 계정은 404입니다.
+
+```json
+{ "displayName": "Kim Minsu", "centerId": 3, "password": "********" }
+```
+
+- `displayName`, `centerId`는 필수입니다.
+- `password`는 선택입니다. **빼고 보내면 기존 비밀번호가 유지됩니다.** (`PUT /api/centers/:id`와 달리, 여기서는 빠진 필드가 지워지지 않습니다.)
+- 직원을 다른 센터로 옮겨도 그 직원이 등록한 물품의 보관 센터는 **바뀌지 않습니다** (FR-10).
+- 변경 사항은 직원의 다음 요청부터 바로 적용되며, 다시 로그인할 필요가 없습니다.
+
+**200** + 수정된 `Staff`
+
+| 실패 | 경우 |
+|------|------|
+| 400 | 입력값 오류, 또는 `centerId`가 살아 있는 센터가 아님 |
+| 401 / 403 | 로그인 안 함 / 관리자가 아님 |
+| 404 | 해당 id의 `Staff` 계정이 없음 (관리자 계정 포함), 또는 `:id`가 양의 정수가 아님 |

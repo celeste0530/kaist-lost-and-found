@@ -48,7 +48,7 @@ Every failure uses the format below. The frontend can show the `error` string to
 | 401 | Login required | `Login required.` |
 | 403 | Not allowed | `Administrator access required.` |
 | 404 | Not found | `Center not found.` |
-| 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.` |
+| 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
 | 500 | Internal server error | `Internal server error.` |
 | 501 | API not implemented yet | `Not implemented yet (FR-03).` |
 
@@ -245,10 +245,70 @@ The APIs below exist only as placeholders and currently return **501**. Their fo
 
 ## Staff accounts (FR-10)
 
-The APIs below exist only as placeholders and currently return **501**.
+All staff APIs are **Admin** only, so staff members cannot change their own assigned center (FR-10).
 
-| API | Access | Description |
-|-----|--------|-------------|
-| `GET /api/staff` | Admin | List staff accounts |
-| `POST /api/staff` | Admin | Create a staff account and assign a center |
-| `PUT /api/staff/:id` | Admin | Change staff details / assigned center |
+### Staff object
+
+Same shape as the login response. The password hash is never included (SRS 3.1).
+
+```json
+{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3 }
+```
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `id` | number | Assigned by the server |
+| `email` | string | Login ID. Valid email, up to 255 characters, unique (case-insensitive). Cannot be changed after creation |
+| `password` | string | **Request only.** 8–72 characters. Stored as a bcrypt hash |
+| `displayName` | string | 1–100 characters after trimming |
+| `role` | `"Staff"` \| `"Administrator"` | **Response only.** Accounts created through this API are always `Staff` |
+| `centerId` | number \| null | Assigned center. Required for `Staff` and must be an active (not deleted) center. `null` for administrators |
+
+- The password length rule (8–72) is not defined by the SRS: the minimum matches the `create-admin` script, and 72 is bcrypt's input limit.
+- Administrator accounts are created with `npm run create-admin` (see README), not through this API.
+- Deactivating or deleting staff accounts is not implemented yet.
+
+### `GET /api/staff` — Admin
+
+All accounts, administrators included, sorted by role (`Staff` first) and then by display name. **200** + `Staff[]`
+
+| Failure | When |
+|---------|------|
+| 401 / 403 | Not logged in / not an administrator |
+
+### `POST /api/staff` — Admin
+
+Creates a `Staff` account assigned to one active center.
+
+```json
+{ "email": "kim@example.com", "password": "********", "displayName": "Kim", "centerId": 2 }
+```
+
+**201** + the created `Staff`. A `role` field in the request is ignored.
+
+| Failure | When |
+|---------|------|
+| 400 | Invalid input, or `centerId` is not an active center (`centerId: Center not found or deleted.`) |
+| 401 / 403 | Not logged in / not an administrator |
+| 409 | The email is already used by another account (`email: This email is already in use.`) |
+
+### `PUT /api/staff/:id` — Admin
+
+Renames a staff member, moves them to another active center, and optionally resets their password. Only `Staff` accounts can be edited; administrator accounts return 404.
+
+```json
+{ "displayName": "Kim Minsu", "centerId": 3, "password": "********" }
+```
+
+- `displayName` and `centerId` are required.
+- `password` is optional: **leave it out to keep the current password.** (Unlike `PUT /api/centers/:id`, a missing field here does not clear anything.)
+- Moving a staff member to another center does **not** change the storage center of items they registered (FR-10).
+- The change applies from the staff member's next request; they do not need to log in again.
+
+**200** + the updated `Staff`
+
+| Failure | When |
+|---------|------|
+| 400 | Invalid input, or `centerId` is not an active center |
+| 401 / 403 | Not logged in / not an administrator |
+| 404 | No `Staff` account with this id (including administrator accounts), or `:id` is not a positive integer |

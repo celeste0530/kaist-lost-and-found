@@ -45,7 +45,7 @@ SRS에는 스택이 정해져 있지 않아(2.1.4) 아래 기본값으로 시작
 │       ├── middleware/ auth(인증/권한), upload(JPG/PNG 10MB)
 │       └── scripts/   createAdmin (최초 관리자 생성)
 ├── db/schema.sql      SRS 3.3 기반 DB 스키마
-├── docs/              SRS, 구현 계획(FR 매핑 + SRS 해석 메모)
+├── docs/              SRS, 구현 계획(FR 매핑 + SRS 해석 메모), API 명세(api.en.md 기준, api.md 번역)
 └── docker-compose.yml 개발용 MySQL
 ```
 
@@ -71,14 +71,14 @@ npm run dev                                                 # http://localhost:5
 ```
 
 - 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d`
-- 센터/물품 등록 API는 아직 없으므로(아래 표 참고) 지금은 DB에 직접 넣어야 목록 화면에 데이터가 보입니다.
+- 센터는 관리자 계정으로 `POST /api/centers`를 호출해 만들 수 있습니다([API 명세](docs/api.en.md) 참고). 물품 등록 API는 아직 없으므로(아래 표 참고) 물품은 DB에 직접 넣어야 목록 화면에 보입니다.
 
 ## 구현 현황
 
 | FR | 내용 | 상태 |
 |----|------|------|
 | FR-01 | 직원 로그인/로그아웃 | 구현됨 |
-| FR-02 | 센터 관리 | 조회만 구현, 생성/수정/삭제 TODO |
+| FR-02 | 센터 관리 | 구현됨 (생성/수정/삭제, 삭제는 소프트 삭제 + Available 물품 있으면 거절) |
 | FR-03 | 습득물 등록 | TODO |
 | FR-04 | 습득물 수정 | TODO |
 | FR-05 | 검색/필터 | 키워드·카테고리·날짜·센터·좌표(bbox) API 구현, 화면은 키워드·카테고리만 |
@@ -88,4 +88,13 @@ npm run dev                                                 # http://localhost:5
 | FR-09 | 삭제/폐기 처리 | TODO |
 | FR-10 | 관리자 관리 | TODO |
 
-자세한 매핑과 SRS 해석 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md)를 참고하세요.
+자세한 매핑과 SRS 해석 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md)를, API 요청/응답 형식은 [`docs/api.en.md`](docs/api.en.md)(한국어 번역: [`docs/api.md`](docs/api.md))를 참고하세요.
+
+## 논의 필요 사항
+
+개발하면서 나온, 팀 결정이 필요한 주제입니다. 결정되면 결과를 적고 관련 문서(스키마, API 명세)를 함께 고친 뒤 이 표에서 정리해 주세요. SRS 해석에 관한 기존 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md#srs-해석-메모-팀-확인-필요)에 있습니다.
+
+| # | 주제 | 현재 상태 / 문제 |
+|---|------|------------------|
+| 1 | **시간대 (UTC vs KST)** | 개발용 MySQL 컨테이너가 UTC로 동작해서 `NOW()`, `CURRENT_TIMESTAMP`로 저장되는 시각(등록일, 반환일, 센터 삭제 시각)이 한국 시각보다 9시간 이릅니다. DB를 KST로 맞출지, UTC로 저장하고 화면에서 변환할지 정해야 합니다. |
+| 2 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |

@@ -8,7 +8,8 @@ export const notImplemented =
   };
 
 /** Parses a positive integer route parameter. Returns null when invalid. */
-export function parseId(value: string | undefined): number | null {
+export function parseId(value: string | string[] | undefined): number | null {
+  if (typeof value !== "string") return null;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
 }

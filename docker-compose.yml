@@ -1,0 +1,21 @@
+# Local development database only. Do not reuse these credentials anywhere else.
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: lostfound
+      MYSQL_USER: lostfound
+      MYSQL_PASSWORD: lostfound
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - db-data:/var/lib/mysql
+      # Applied automatically only when the volume is created for the first time.
+      # To re-apply: docker compose down -v && docker compose up -d
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+volumes:
+  db-data:

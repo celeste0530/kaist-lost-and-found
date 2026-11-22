@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { pool } from "../db";
 import { requireAdmin } from "../middleware/auth";
-import { parseId } from "../utils";
+import { parseBody, parseId } from "../utils";
 
 const router = Router();
 
@@ -50,13 +50,8 @@ router.get("/:id", async (req, res) => {
 // FR-02 / FR-10: administrators create, edit and delete centers.
 //   Delete = set deleted_at, and reject while the center still has items with status 'Available'.
 router.post("/", requireAdmin, async (req,res) => {
-  const parsed = centerInput.safeParse(req.body);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    res.status(400).json({ error: `${issue.path.join(".")}: ${issue.message}` });
-    return;
-  }
-  const c = parsed.data;
+  const c = parseBody(centerInput, req.body, res);
+  if (c === null) return;
 
   const [result] = await pool.query<ResultSetHeader>(
     `INSERT INTO center (name, location, phone, email, operating_hours, closure_information)
@@ -75,13 +70,8 @@ router.put("/:id", requireAdmin, async (req,res) => {
     return;
   }
   
-  const parsed = centerInput.safeParse(req.body);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    res.status(400).json({ error: `${issue.path.join(".")}: ${issue.message}` });
-    return;
-  }
-  const c = parsed.data;
+  const c = parseBody(centerInput, req.body, res);
+  if (c === null) return;
 
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE center

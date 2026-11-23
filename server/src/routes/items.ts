@@ -99,7 +99,11 @@ router.get("/:id", async (req, res) => {
 // --- Not implemented yet -------------------------------------------------------------------
 // FR-03: register. Use uploadImage middleware (src/middleware/upload.ts). Validate: name, category,
 //        found date (not in the future), found location (lng/lat), description. Storage center =
-//        req.user.centerId (not editable). New items start as 'Available'. Administrators: decide which center.
+//        req.user.centerId (not editable). New items start as 'Available'.
+//        Administrators (no center of their own) must choose the storage center: accept a centerId field and
+//        check that it is an existing, non-deleted center (deleted_at IS NULL). Staff must not send centerId.
+//        (Provisional team decision - to be confirmed with the client team. See implementation-plan.md note 10.)
+//        Insert the item and its initial item_status_history row (NULL -> 'Available') in one transaction.
 router.post("/", requireAuth, notImplemented("FR-03"));
 // FR-04: edit. Only while status = 'Available' and item.center_id = req.user.centerId (or administrator).
 router.put("/:id", requireAuth, notImplemented("FR-04"));

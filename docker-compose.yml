@@ -10,7 +10,8 @@ services:
       MYSQL_PASSWORD: lostfound
     ports:
       - "3306:3306"
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    # All DATETIME values (NOW(), CURRENT_TIMESTAMP, seed data) are Korea Standard Time.
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+09:00
     volumes:
       - db-data:/var/lib/mysql
       # Applied automatically only when the volume is created for the first time.

@@ -72,6 +72,7 @@ npm run dev                                                 # http://localhost:5
 ```
 
 - 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d` (로컬 DB 데이터가 모두 지워짐)
+- DB의 날짜·시간은 모두 한국 시간(KST, `+09:00`) 기준입니다.
 - DB를 처음 만들 때 [`db/seed.sql`](db/seed.sql)의 샘플 데이터가 함께 들어갑니다: 센터 5개(1개는 삭제됨), 물품 28개(Available 17 / Returned 5 / Removed 2 / Disposed 4).
 - 샘플 계정 (**로컬 개발 전용**, 비밀번호는 모두 `password1234`). 시드를 쓰면 `create-admin`은 건너뛰어도 됩니다.
 

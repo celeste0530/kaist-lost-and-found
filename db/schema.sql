@@ -6,6 +6,7 @@
 --     Insert with:  ST_GeomFromText('POINT(127.3604 36.3721)')   -- 'POINT(lng lat)'
 --     Read with:    ST_X(col) AS lng, ST_Y(col) AS lat
 --   * See docs/implementation-plan.md for where this schema deviates from / interprets the SRS.
+--   * ENUM values must match server/src/constants.ts and client/src/types.ts (checked at server startup).
 
 CREATE TABLE center (
   center_id           INT          NOT NULL AUTO_INCREMENT,
@@ -57,10 +58,8 @@ CREATE TABLE item (
   CONSTRAINT fk_item_returned_by   FOREIGN KEY (returned_by)   REFERENCES staff_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- SRS 2.1.4 ("status history") / FR-09 ("keep records for management history").
--- Not in the SRS 3.3 table; added so that Removed / Disposed changes also record who and when.
--- One row per status change. from_status is NULL for the initial registration (-> 'Available').
--- Write the item UPDATE and the history INSERT in the same transaction (3.4.1), e.g.
+-- Status history (SRS 2.1.4, FR-09). Not in the 3.3 table. One row per change; from_status is NULL on registration.
+-- Change status and insert history in one transaction (3.4.1), e.g.
 --   UPDATE item SET status = 'Returned', return_date = NOW(), returned_by = ?
 --     WHERE item_id = ? AND status = 'Available';      -- affectedRows = 0 -> reject
 --   INSERT INTO item_status_history (item_id, from_status, to_status, changed_by)

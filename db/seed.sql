@@ -1,10 +1,8 @@
--- KAIST Lost and Found System - development seed data (MySQL 8)
--- LOCAL DEVELOPMENT ONLY. Applied automatically after schema.sql when the DB volume is first created.
--- To reload: docker compose down -v && docker compose up -d
+-- KAIST Lost and Found System - development seed data. LOCAL DEVELOPMENT ONLY.
+-- Loaded after schema.sql when the DB volume is first created (reload: docker compose down -v && docker compose up -d).
 --
--- * Centers are FICTIONAL, placed at plausible KAIST Daejeon campus coordinates.
--- * POINT order is (longitude latitude) - see schema.sql.
--- * Every account below uses the password: password1234
+-- * Centers are fictional, placed on the KAIST Daejeon campus. POINT is (longitude latitude).
+-- * All accounts use the password: password1234
 --     admin@lostfound.test   Administrator (no center)
 --     staff1@lostfound.test  Staff, center 1      staff2@lostfound.test  Staff, center 2
 --     staff3@lostfound.test  Staff, center 3      staff4@lostfound.test  Staff, center 4
@@ -27,12 +25,14 @@ INSERT INTO center (center_id, name, location, phone, email, operating_hours, cl
       '운영 종료', '2026-10-01 폐쇄', '2026-10-01 09:00:00');
 
 -- bcrypt (cost 12) hash of 'password1234'
+SET @pw = '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG';
+
 INSERT INTO staff_user (user_id, email, password_hash, display_name, role, center_id) VALUES
-  (1, 'admin@lostfound.test',  '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG', '시스템 관리자', 'Administrator', NULL),
-  (2, 'staff1@lostfound.test', '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG', '학생회관 직원', 'Staff', 1),
-  (3, 'staff2@lostfound.test', '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG', '학술문화관 직원', 'Staff', 2),
-  (4, 'staff3@lostfound.test', '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG', '기숙사 직원', 'Staff', 3),
-  (5, 'staff4@lostfound.test', '$2a$12$6E8NOeoR5s4cR8y059TbT.RTsePp4y1wqsDHLxhFTP0QgsXuMWNKG', '본관 직원', 'Staff', 4);
+  (1, 'admin@lostfound.test',  @pw, '시스템 관리자',   'Administrator', NULL),
+  (2, 'staff1@lostfound.test', @pw, '학생회관 직원',   'Staff', 1),
+  (3, 'staff2@lostfound.test', @pw, '학술문화관 직원', 'Staff', 2),
+  (4, 'staff3@lostfound.test', @pw, '기숙사 직원',     'Staff', 3),
+  (5, 'staff4@lostfound.test', @pw, '본관 직원',       'Staff', 4);
 
 INSERT INTO item (item_id, center_id, registered_by, returned_by, name, category, found_date, found_location,
                   description, image, status, registration_date, return_date) VALUES

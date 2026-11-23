@@ -30,7 +30,7 @@ SRS v1.1 요구사항을 API / 화면 / 코드 위치에 매핑한 표와, 스�
 1. **Item 테이블의 `Center ID`가 PK로 표기됨** — FK의 오타로 보고 `item.center_id`를 FK로 만들었습니다.
 2. **센터 삭제** — FR-02(삭제 후 신규 등록 불가)와 FR-10(센터가 삭제돼도 물품 기록 보존)을 함께 만족하도록 `center.deleted_at` 소프트 삭제로 설계했습니다. SRS 3.3 표에는 없는 컬럼입니다.
 3. **관리자의 센터 배정** — FR-10은 "직원 계정에 센터 배정 필수"라고만 하고 관리자는 언급이 없어, `staff_user.center_id`를 NULL 허용으로 두었습니다. Staff는 필수이며 서버 로직에서 검증해야 합니다 (DB CHECK 제약은 넣지 않음).
-4. **상태 이력 테이블** — 2.1.4는 "status history"를 저장한다고 하지만 3.3에는 해당 테이블이 없습니다. 현재는 `item.return_date` / `returned_by`만 사용합니다. 이력이 필요하면 테이블을 추가하세요.
+4. **상태 이력 테이블** — 2.1.4는 "status history"를 저장한다고 하지만 3.3에는 해당 테이블이 없습니다. `item.return_date` / `returned_by`만으로는 Removed/Disposed를 누가 언제 처리했는지 남지 않아(FR-09 "관리 이력 보존") `item_status_history` 테이블을 추가했습니다. 등록(FR-03)과 상태 변경(FR-08/09) 시 item UPDATE와 이력 INSERT를 한 트랜잭션으로 처리해야 합니다(사용 예는 `db/schema.sql` 주석).
 5. **습득 위치 필터 (FR-05)** — 방식이 정해져 있지 않아 `bbox=minLng,minLat,maxLng,maxLat` 파라미터로 임시 구현했습니다. UI는 지도 영역 선택 / 반경 검색 등으로 정해야 합니다.
 6. **비로그인 상세 조회 범위 (FR-06)** — Returned/Removed/Disposed 물품의 상세 페이지를 공개할지 정해져 있지 않아, 현재는 비로그인 사용자에게 `Available`만 보여 줍니다(나머지는 404).
 7. **좌표 저장 규칙** — `POINT`의 X = 경도, Y = 위도 (SRID 0). MySQL의 SRID 4326은 위도/경도 축 순서가 달라 혼동되기 쉬워 사용하지 않았습니다.

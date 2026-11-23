@@ -44,7 +44,8 @@ SRS에는 스택이 정해져 있지 않아(2.1.4) 아래 기본값으로 시작
 │       ├── routes/    auth, items, centers, staff
 │       ├── middleware/ auth(인증/권한), upload(JPG/PNG 10MB)
 │       └── scripts/   createAdmin (최초 관리자 생성)
-├── db/schema.sql      SRS 3.3 기반 DB 스키마
+├── db/schema.sql      SRS 3.3 기반 DB 스키마 (+ 상태 이력 테이블)
+├── db/seed.sql        개발용 샘플 데이터
 ├── docs/              SRS, 구현 계획(FR 매핑 + SRS 해석 메모)
 └── docker-compose.yml 개발용 MySQL
 ```
@@ -70,8 +71,14 @@ npm install
 npm run dev                                                 # http://localhost:5173
 ```
 
-- 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d`
-- 센터/물품 등록 API는 아직 없으므로(아래 표 참고) 지금은 DB에 직접 넣어야 목록 화면에 데이터가 보입니다.
+- 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d` (로컬 DB 데이터가 모두 지워짐)
+- DB를 처음 만들 때 [`db/seed.sql`](db/seed.sql)의 샘플 데이터가 함께 들어갑니다: 센터 5개(1개는 삭제됨), 물품 28개(Available 17 / Returned 5 / Removed 2 / Disposed 4).
+- 샘플 계정 (**로컬 개발 전용**, 비밀번호는 모두 `password1234`). 시드를 쓰면 `create-admin`은 건너뛰어도 됩니다.
+
+  | 이메일 | 역할 | 센터 |
+  |--------|------|------|
+  | `admin@lostfound.test` | Administrator | - |
+  | `staff1@lostfound.test` ~ `staff4@lostfound.test` | Staff | 1 ~ 4 |
 
 ## 구현 현황
 

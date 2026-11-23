@@ -16,6 +16,8 @@ services:
       # Applied automatically only when the volume is created for the first time.
       # To re-apply: docker compose down -v && docker compose up -d
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Development sample data (centers, staff accounts, items). See db/seed.sql for the logins.
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
 volumes:
   db-data:

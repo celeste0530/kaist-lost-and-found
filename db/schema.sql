@@ -56,3 +56,24 @@ CREATE TABLE item (
   CONSTRAINT fk_item_registered_by FOREIGN KEY (registered_by) REFERENCES staff_user (user_id),
   CONSTRAINT fk_item_returned_by   FOREIGN KEY (returned_by)   REFERENCES staff_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- SRS 2.1.4 ("status history") / FR-09 ("keep records for management history").
+-- Not in the SRS 3.3 table; added so that Removed / Disposed changes also record who and when.
+-- One row per status change. from_status is NULL for the initial registration (-> 'Available').
+-- Write the item UPDATE and the history INSERT in the same transaction (3.4.1), e.g.
+--   UPDATE item SET status = 'Returned', return_date = NOW(), returned_by = ?
+--     WHERE item_id = ? AND status = 'Available';      -- affectedRows = 0 -> reject
+--   INSERT INTO item_status_history (item_id, from_status, to_status, changed_by)
+--     VALUES (?, 'Available', 'Returned', ?);
+CREATE TABLE item_status_history (
+  history_id  INT      NOT NULL AUTO_INCREMENT,
+  item_id     INT      NOT NULL,
+  from_status ENUM('Available', 'Returned', 'Removed', 'Disposed') NULL,
+  to_status   ENUM('Available', 'Returned', 'Removed', 'Disposed') NOT NULL,
+  changed_by  INT      NOT NULL,
+  changed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (history_id),
+  KEY idx_history_item (item_id, changed_at),
+  CONSTRAINT fk_history_item FOREIGN KEY (item_id)    REFERENCES item (item_id),
+  CONSTRAINT fk_history_user FOREIGN KEY (changed_by) REFERENCES staff_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

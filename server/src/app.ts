@@ -43,6 +43,13 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ error: err.message });
     return;
   }
+  // Errors from express.json() carry a 4xx status: a body that is not valid JSON (400),
+  // a body that is too large (413), and so on. They are the client's mistake, not a server error.
+  if (typeof err?.status === "number" && err.status >= 400 && err.status < 500) {
+    const message = err.type === "entity.parse.failed" ? "Request body is not valid JSON." : err.message;
+    res.status(err.status).json({ error: message });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: "Internal server error." });
 };

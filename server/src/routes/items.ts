@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { z } from "zod";
 import { CATEGORIES, ITEM_STATUSES } from "../constants";
@@ -18,13 +18,18 @@ const ITEM_SELECT = `
   FROM item i
   JOIN center c ON c.center_id = i.center_id`;
 
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
 // "2026-02-30" matches the YYYY-MM-DD pattern but is not a real day.
 function isRealDate(value: string): boolean {
   const d = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
+
+// A real calendar date. Without the isRealDate check MySQL rejects values such as "2026-02-30"
+// with an error, which would turn into a 500 response (both for registration and for search filters).
+const date = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isRealDate, "Invalid date");
 
 // FR-03 "the found date cannot be in the future": "today" is the date on campus (Korea),
 // independent of the server's or the database's time zone.
@@ -44,9 +49,7 @@ const coordinate = (min: number, max: number) =>
 const itemCreateInput = z.object({
   name: z.string().trim().min(1).max(255),
   category: z.enum(CATEGORIES),
-  foundDate: date
-    .refine(isRealDate, "Invalid date")
-    .refine((d) => d <= todayInKorea(), "Found date cannot be in the future"),
+  foundDate: date.refine((d) => d <= todayInKorea(), "Found date cannot be in the future"),
   foundLat: coordinate(-90, 90),
   foundLng: coordinate(-180, 180),
   description: z.string().trim().min(1),
@@ -241,9 +244,68 @@ router.put("/:id", requireAuth, uploadImage, async (req, res) => {
   }
 });
 
+type ClosedStatus = "Returned" | "Removed" | "Disposed";
+
+// FR-08 / FR-09 / FR-10: move an Available item to a closed status (3.5.3: Available -> Returned / Removed / Disposed).
+// Staff can change items stored at their own center; administrators can change items at any center.
+// The record itself is kept for administrative history.
+const changeStatus =
+  (newStatus: ClosedStatus): RequestHandler =>
+  async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+      res.status(404).json({ error: "Item not found." });
+      return;
+    }
+    const user = req.user!; // requireAuth has already rejected requests without a logged-in user
+
+    const conn = await pool.getConnection();
+    let committed = false;
+    try {
+      await conn.beginTransaction();
+      // FOR UPDATE: two staff members marking the same item at the same time cannot both succeed (3.4.1).
+      const [rows] = await conn.query<RowDataPacket[]>(
+        "SELECT center_id, status FROM item WHERE item_id = ? FOR UPDATE",
+        [id],
+      );
+      const item = rows[0];
+      if (!item) {
+        res.status(404).json({ error: "Item not found." });
+        return;
+      }
+      if (user.role !== "Administrator" && item.center_id !== user.centerId) {
+        res.status(403).json({ error: "You can only change items stored at your center." });
+        return;
+      }
+      if (item.status !== "Available") {
+        res.status(409).json({ error: `Only Available items can be marked ${newStatus}.` });
+        return;
+      }
+
+      if (newStatus === "Returned") {
+        // FR-08: record when the item was returned and which staff user did it.
+        await conn.query(
+          "UPDATE item SET status = 'Returned', return_date = NOW(), returned_by = ? WHERE item_id = ?",
+          [user.id, id],
+        );
+      } else {
+        await conn.query("UPDATE item SET status = ? WHERE item_id = ?", [newStatus, id]);
+      }
+      await conn.commit();
+      committed = true;
+    } finally {
+      if (!committed) await conn.rollback();
+      conn.release();
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(`${ITEM_SELECT} WHERE i.item_id = ?`, [id]);
+    res.json(rows[0]);
+  };
+
+// FR-08: mark an item Returned after the owner has been verified offline at the center.
+router.post("/:id/return", requireAuth, changeStatus("Returned"));
+
 // --- Not implemented yet -------------------------------------------------------------------
-// FR-08: mark Returned. Set return_date = NOW(), returned_by = req.user.id. Update atomically (3.4.1).
-router.post("/:id/return", requireAuth, notImplemented("FR-08"));
 // FR-09: mark Removed (invalid / duplicate record) or Disposed (no longer stored).
 router.post("/:id/remove", requireAuth, notImplemented("FR-09"));
 router.post("/:id/dispose", requireAuth, notImplemented("FR-09"));

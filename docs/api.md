@@ -44,13 +44,14 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 | 상태 코드 | 의미 | 예시 메시지 |
 |-----------|------|-------------|
-| 400 | 입력값 오류 | `name: String must contain at least 1 character(s)` |
+| 400 | 입력값 오류 | `name: String must contain at least 1 character(s)`, `Request body is not valid JSON.` |
 | 401 | 로그인 필요 | `Login required.` |
 | 403 | 권한 없음 | `Administrator access required.`, `You can only edit items stored at your center.` |
 | 404 | 대상 없음 | `Center not found.`, `Item not found.` |
 | 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
+| 413 | 100KB를 넘는 JSON 본문 | `request entity too large` |
 | 500 | 서버 내부 오류 | `Internal server error.` |
-| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-08).` |
+| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-09).` |
 
 입력값 검사(400)는 문제가 여러 개여도 **첫 번째 문제 하나**만 `"<필드>: <이유>"` 형식으로 알려 줍니다.
 
@@ -223,7 +224,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 예: `/api/items?q=wallet&category=Wallet/Card&centerId=1`
 
-파라미터 형식이 틀리면 **400** `Invalid search parameters.`
+파라미터 형식이 틀리면 **400** `Invalid search parameters.` (`2026-02-30`처럼 없는 날짜 포함)
 
 ### `GET /api/items/:id` — Public (FR-06)
 
@@ -315,13 +316,36 @@ const item = await api(`/items/${id}`, { method: "PUT", body: form });
 | 404 | 해당 id의 물품이 없음, 또는 `:id`가 양의 정수가 아님: `Item not found.` |
 | 409 | 물품이 `Available`이 아님: `Only Available items can be edited.` |
 
+### `POST /api/items/:id/return` — Staff (FR-08, FR-10)
+
+센터가 오프라인으로 소유자를 확인한 뒤, `Available` 물품을 `Returned`로 처리합니다. 요청 본문은 없습니다.
+
+- 직원은 자기 센터에 보관된 물품을 처리할 수 있습니다. 관리자는 모든 센터의 물품을 처리할 수 있습니다 (FR-10).
+- `Available` 물품만 처리할 수 있습니다 (3.5.3: Available → Returned). 그 외 상태는 **409**입니다.
+- 반환일(`return_date`)과 처리한 직원(`returned_by`)이 기록됩니다 (FR-08). 이 값은 `Item` 응답에는 포함되지 않습니다.
+- 기록은 남습니다. `Returned` 물품은 공개 검색과 지도에서 사라지고 공개 상세 조회는 404가 되지만, 직원은 `GET /api/items?status=Returned`로 찾아서 상세를 볼 수 있습니다.
+- 상태 변경은 행 잠금을 건 트랜잭션으로 처리되어, 같은 물품을 동시에 두 번 처리하면 한 요청만 성공하고 다른 요청은 409를 받습니다 (3.4.1).
+- ⚠️ `return_date`는 DB 시간대로 저장됩니다 (현재 UTC. 공통 규칙의 날짜 설명 참고).
+
+```js
+const item = await api(`/items/${id}/return`, { method: "POST" });
+```
+
+**200** + 변경된 `Item` (`status: "Returned"`)
+
+| 실패 | 경우 |
+|------|------|
+| 401 | 로그인 안 함 |
+| 403 | 직원이 다른 센터에 보관된 물품을 처리하려 함: `You can only change items stored at your center.` |
+| 404 | 해당 id의 물품이 없음, 또는 `:id`가 양의 정수가 아님: `Item not found.` |
+| 409 | 물품이 `Available`이 아님 (예: 이미 반환됨): `Only Available items can be marked Returned.` |
+
 ### 미구현 API
 
 아래 API는 자리만 있고 현재 **501**을 응답합니다. 구현하면서 이 문서에 형식을 채워 넣습니다.
 
 | API | 권한 | FR |
 |-----|------|----|
-| `POST /api/items/:id/return` | Staff | FR-08 반환 처리 |
 | `POST /api/items/:id/remove` | Staff | FR-09 Removed 처리 |
 | `POST /api/items/:id/dispose` | Staff | FR-09 Disposed 처리 |
 

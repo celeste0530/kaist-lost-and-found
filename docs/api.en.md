@@ -44,13 +44,14 @@ Every failure uses the format below. The frontend can show the `error` string to
 
 | Status | Meaning | Example message |
 |--------|---------|-----------------|
-| 400 | Invalid input | `name: String must contain at least 1 character(s)` |
+| 400 | Invalid input | `name: String must contain at least 1 character(s)`, `Request body is not valid JSON.` |
 | 401 | Login required | `Login required.` |
 | 403 | Not allowed | `Administrator access required.`, `You can only edit items stored at your center.` |
 | 404 | Not found | `Center not found.`, `Item not found.` |
 | 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
+| 413 | JSON body larger than 100 KB | `request entity too large` |
 | 500 | Internal server error | `Internal server error.` |
-| 501 | API not implemented yet | `Not implemented yet (FR-08).` |
+| 501 | API not implemented yet | `Not implemented yet (FR-09).` |
 
 Input validation errors (400) report **only the first problem**, formatted as `"<field>: <reason>"`, even when there are several.
 
@@ -223,7 +224,7 @@ Search, filter and list items. The map screen uses the same API. Sorted by regis
 
 Example: `/api/items?q=wallet&category=Wallet/Card&centerId=1`
 
-**400** `Invalid search parameters.` when a parameter has the wrong format.
+**400** `Invalid search parameters.` when a parameter has the wrong format, including impossible dates such as `2026-02-30`.
 
 ### `GET /api/items/:id` — Public (FR-06)
 
@@ -315,13 +316,36 @@ const item = await api(`/items/${id}`, { method: "PUT", body: form });
 | 404 | No item with this id, or `:id` is not a positive integer: `Item not found.` |
 | 409 | The item is not `Available`: `Only Available items can be edited.` |
 
+### `POST /api/items/:id/return` — Staff (FR-08, FR-10)
+
+Marks an `Available` item as `Returned`, after the center has verified the owner offline. No request body.
+
+- Staff can mark items stored at their own center. Administrators can mark items at any center (FR-10).
+- Only `Available` items can be marked (3.5.3: Available → Returned). Any other status returns **409**.
+- The return date (`return_date`) and the staff user who did it (`returned_by`) are recorded (FR-08). They are not included in the `Item` response.
+- The record is kept. A `Returned` item disappears from public search and the map and returns 404 on public details, but staff can still find it with `GET /api/items?status=Returned` and open its details.
+- The status change runs in a transaction with a row lock, so when two requests mark the same item at the same time, one succeeds and the other gets 409 (3.4.1).
+- ⚠️ `return_date` is stored in the database's time zone (currently UTC; see the date note under Common rules).
+
+```js
+const item = await api(`/items/${id}/return`, { method: "POST" });
+```
+
+**200** + the updated `Item` (`status: "Returned"`)
+
+| Failure | When |
+|---------|------|
+| 401 | Not logged in |
+| 403 | A staff member tries to mark an item stored at another center: `You can only change items stored at your center.` |
+| 404 | No item with this id, or `:id` is not a positive integer: `Item not found.` |
+| 409 | The item is not `Available` (e.g. already returned): `Only Available items can be marked Returned.` |
+
 ### Not implemented yet
 
 The APIs below exist only as placeholders and currently return **501**. Their formats will be added here as they are implemented.
 
 | API | Access | FR |
 |-----|--------|----|
-| `POST /api/items/:id/return` | Staff | FR-08 Mark as Returned |
 | `POST /api/items/:id/remove` | Staff | FR-09 Mark as Removed |
 | `POST /api/items/:id/dispose` | Staff | FR-09 Mark as Disposed |
 

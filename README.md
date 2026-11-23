@@ -86,8 +86,8 @@ npm run dev                                                 # http://localhost:5
 | FR-06 | 습득물 상세 | 구현됨 |
 | FR-07 | 지도 탐색 | 기본 구현, 겹치는 마커 처리 TODO |
 | FR-08 | 반환 처리 | 구현됨 (Available 물품만, 반환일·처리자 기록, 직원은 자기 센터 물품, 관리자는 모든 센터 물품) |
-| FR-09 | 삭제/폐기 처리 | TODO |
-| FR-10 | 관리자 관리 | 일부 구현: 센터 관리(FR-02), 직원 계정 목록/생성/수정, 관리자의 물품 수정(FR-04)·반환 처리(FR-08) 완료. 직원 비활성화, 관리자의 Removed/Disposed 처리(FR-09) TODO |
+| FR-09 | 삭제/폐기 처리 | 구현됨 (Available 물품만 Removed/Disposed로, 기록은 보존. 처리자·처리 시각은 기록하지 않음) |
+| FR-10 | 관리자 관리 | 일부 구현: 센터 관리(FR-02), 직원 계정 목록/생성/수정, 관리자의 물품 수정(FR-04)·상태 변경(FR-08/09) 완료. 직원 비활성화 TODO |
 
 자세한 매핑과 SRS 해석 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md)를, API 요청/응답 형식은 [`docs/api.en.md`](docs/api.en.md)(한국어 번역: [`docs/api.md`](docs/api.md))를 참고하세요.
 

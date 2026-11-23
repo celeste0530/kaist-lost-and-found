@@ -51,7 +51,6 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 | 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
 | 413 | 100KB를 넘는 JSON 본문 | `request entity too large` |
 | 500 | 서버 내부 오류 | `Internal server error.` |
-| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-09).` |
 
 입력값 검사(400)는 문제가 여러 개여도 **첫 번째 문제 하나**만 `"<필드>: <이유>"` 형식으로 알려 줍니다.
 
@@ -340,14 +339,31 @@ const item = await api(`/items/${id}/return`, { method: "POST" });
 | 404 | 해당 id의 물품이 없음, 또는 `:id`가 양의 정수가 아님: `Item not found.` |
 | 409 | 물품이 `Available`이 아님 (예: 이미 반환됨): `Only Available items can be marked Returned.` |
 
-### 미구현 API
+### `POST /api/items/:id/remove`, `POST /api/items/:id/dispose` — Staff (FR-09, FR-10)
 
-아래 API는 자리만 있고 현재 **501**을 응답합니다. 구현하면서 이 문서에 형식을 채워 넣습니다.
+`Available` 물품을 `Removed` 또는 `Disposed`로 처리합니다. 요청 본문은 없습니다.
 
-| API | 권한 | FR |
-|-----|------|----|
-| `POST /api/items/:id/remove` | Staff | FR-09 Removed 처리 |
-| `POST /api/items/:id/dispose` | Staff | FR-09 Disposed 처리 |
+| API | 바뀌는 상태 | 언제 쓰나 (FR-09) |
+|-----|-------------|-------------------|
+| `POST /api/items/:id/remove` | `Removed` | 기록이 잘못 만들어졌거나, 중복이거나, 더 이상 유효한 활성 기록으로 남으면 안 될 때 |
+| `POST /api/items/:id/dispose` | `Disposed` | 정상적으로 등록된 물품이지만, 센터의 보관·폐기 정책에 따라 더 이상 보관하지 않을 때 |
+
+- 규칙은 `POST /api/items/:id/return`과 같습니다. 직원은 자기 센터 물품, 관리자는 모든 센터 물품을 처리할 수 있고(FR-10), `Available` 물품만 처리할 수 있으며(3.5.3) 그 외는 **409**, 행 잠금을 건 트랜잭션으로 처리됩니다.
+- 기록은 남습니다. 공개 검색, 지도, 공개 상세에서는 사라지지만, 직원은 `GET /api/items?status=Removed` 또는 `?status=Disposed`로 찾을 수 있습니다.
+- 반환과 달리 **누가·언제 처리했는지는 기록되지 않습니다.** 스키마에 해당 칸이 없기 때문입니다(`return_date` / `returned_by`만 있고 이 값은 `null`로 남음). SRS는 상태 이력(2.1.4)을 언급하지만, 저장 방식은 아직 정하지 않았습니다.
+
+```js
+const item = await api(`/items/${id}/dispose`, { method: "POST" }); // 또는 `/items/${id}/remove`
+```
+
+**200** + 변경된 `Item` (`status: "Removed"` 또는 `"Disposed"`)
+
+| 실패 | 경우 |
+|------|------|
+| 401 | 로그인 안 함 |
+| 403 | 직원이 다른 센터에 보관된 물품을 처리하려 함: `You can only change items stored at your center.` |
+| 404 | 해당 id의 물품이 없음, 또는 `:id`가 양의 정수가 아님: `Item not found.` |
+| 409 | 물품이 `Available`이 아님: `Only Available items can be marked Removed.` / `Only Available items can be marked Disposed.` |
 
 ---
 

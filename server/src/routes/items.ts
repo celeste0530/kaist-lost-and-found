@@ -5,7 +5,7 @@ import { CATEGORIES, ITEM_STATUSES } from "../constants";
 import { pool } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { removeUpload, uploadImage } from "../middleware/upload";
-import { notImplemented, parseBody, parseId } from "../utils";
+import { parseBody, parseId } from "../utils";
 
 const router = Router();
 
@@ -305,9 +305,9 @@ const changeStatus =
 // FR-08: mark an item Returned after the owner has been verified offline at the center.
 router.post("/:id/return", requireAuth, changeStatus("Returned"));
 
-// --- Not implemented yet -------------------------------------------------------------------
-// FR-09: mark Removed (invalid / duplicate record) or Disposed (no longer stored).
-router.post("/:id/remove", requireAuth, notImplemented("FR-09"));
-router.post("/:id/dispose", requireAuth, notImplemented("FR-09"));
+// FR-09: mark an item Removed (the record was created incorrectly, is a duplicate, or should no longer
+// be an active record) or Disposed (validly registered, but no longer stored under the center's policy).
+router.post("/:id/remove", requireAuth, changeStatus("Removed"));
+router.post("/:id/dispose", requireAuth, changeStatus("Disposed"));
 
 export default router;

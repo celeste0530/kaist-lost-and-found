@@ -51,7 +51,6 @@ Every failure uses the format below. The frontend can show the `error` string to
 | 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
 | 413 | JSON body larger than 100 KB | `request entity too large` |
 | 500 | Internal server error | `Internal server error.` |
-| 501 | API not implemented yet | `Not implemented yet (FR-09).` |
 
 Input validation errors (400) report **only the first problem**, formatted as `"<field>: <reason>"`, even when there are several.
 
@@ -340,14 +339,31 @@ const item = await api(`/items/${id}/return`, { method: "POST" });
 | 404 | No item with this id, or `:id` is not a positive integer: `Item not found.` |
 | 409 | The item is not `Available` (e.g. already returned): `Only Available items can be marked Returned.` |
 
-### Not implemented yet
+### `POST /api/items/:id/remove`, `POST /api/items/:id/dispose` — Staff (FR-09, FR-10)
 
-The APIs below exist only as placeholders and currently return **501**. Their formats will be added here as they are implemented.
+Marks an `Available` item as `Removed` or `Disposed`. No request body.
 
-| API | Access | FR |
-|-----|--------|----|
-| `POST /api/items/:id/remove` | Staff | FR-09 Mark as Removed |
-| `POST /api/items/:id/dispose` | Staff | FR-09 Mark as Disposed |
+| API | New status | When to use (FR-09) |
+|-----|------------|---------------------|
+| `POST /api/items/:id/remove` | `Removed` | The record was created incorrectly, is a duplicate, or should no longer remain as a valid active record |
+| `POST /api/items/:id/dispose` | `Disposed` | The item was validly registered but is no longer stored by the center under its retention or disposal policy |
+
+- Same rules as `POST /api/items/:id/return`: staff can change items stored at their own center, administrators at any center (FR-10); only `Available` items can be changed (3.5.3), otherwise **409**; the change runs in a transaction with a row lock.
+- The record is kept. The item disappears from public search, the map and public details, but staff can still find it with `GET /api/items?status=Removed` or `?status=Disposed`.
+- Unlike a return, **who made the change and when is not recorded**: the schema has no column for it (only `return_date` / `returned_by`, which stay `null`). The SRS mentions a status history (2.1.4), but how to store it has not been decided.
+
+```js
+const item = await api(`/items/${id}/dispose`, { method: "POST" }); // or `/items/${id}/remove`
+```
+
+**200** + the updated `Item` (`status: "Removed"` or `"Disposed"`)
+
+| Failure | When |
+|---------|------|
+| 401 | Not logged in |
+| 403 | A staff member tries to change an item stored at another center: `You can only change items stored at your center.` |
+| 404 | No item with this id, or `:id` is not a positive integer: `Item not found.` |
+| 409 | The item is not `Available`: `Only Available items can be marked Removed.` / `Only Available items can be marked Disposed.` |
 
 ---
 

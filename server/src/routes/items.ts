@@ -52,6 +52,12 @@ const itemCreateInput = z.object({
   description: z.string().trim().min(1),
 });
 
+// FR-04: the same fields as registration (all required, so nothing is cleared by omission).
+// Image: send a new file to replace it, removeImage=true to delete it, or neither to keep it.
+const itemUpdateInput = itemCreateInput.extend({
+  removeImage: z.preprocess((v) => v === true || v === "true", z.boolean()),
+});
+
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
   category: z.enum(CATEGORIES).optional(),
@@ -169,9 +175,73 @@ router.post("/", requireAuth, uploadImage, async (req, res) => {
   }
 });
 
+// FR-04 / FR-10: edit an Available item. Staff can edit items stored at their own center;
+// administrators can edit items at any center. Returned, Removed and Disposed items cannot be edited.
+// The storage center and the status are not changed here.
+router.put("/:id", requireAuth, uploadImage, async (req, res) => {
+  const file = req.file;
+  let saved = false;
+  try {
+    const id = parseId(req.params.id);
+    if (!id) {
+      res.status(404).json({ error: "Item not found." });
+      return;
+    }
+    const it = parseBody(itemUpdateInput, req.body, res);
+    if (it === null) return;
+    const user = req.user!; // requireAuth has already rejected requests without a logged-in user
+
+    let oldImage: string | null = null;
+    const conn = await pool.getConnection();
+    let committed = false;
+    try {
+      await conn.beginTransaction();
+      // FOR UPDATE locks the row until commit, so the checks below still hold when the UPDATE runs
+      // (nobody can mark the item Returned or move it in between).
+      const [rows] = await conn.query<RowDataPacket[]>(
+        "SELECT center_id, status, image FROM item WHERE item_id = ? FOR UPDATE",
+        [id],
+      );
+      const item = rows[0];
+      if (!item) {
+        res.status(404).json({ error: "Item not found." });
+        return;
+      }
+      if (user.role !== "Administrator" && item.center_id !== user.centerId) {
+        res.status(403).json({ error: "You can only edit items stored at your center." });
+        return;
+      }
+      if (item.status !== "Available") {
+        res.status(409).json({ error: "Only Available items can be edited." });
+        return;
+      }
+
+      const newImage: string | null = file ? file.filename : it.removeImage ? null : item.image;
+      await conn.query(
+        `UPDATE item
+         SET name = ?, category = ?, found_date = ?, found_location = POINT(?, ?), description = ?, image = ?
+         WHERE item_id = ?`,
+        [it.name, it.category, it.foundDate, it.foundLng, it.foundLat, it.description, newImage, id],
+      );
+      await conn.commit();
+      committed = true;
+      saved = true;
+      if (item.image && item.image !== newImage) oldImage = item.image;
+    } finally {
+      if (!committed) await conn.rollback();
+      conn.release();
+    }
+
+    if (oldImage) await removeUpload(oldImage); // replaced or removed: the old file is no longer used
+
+    const [rows] = await pool.query<RowDataPacket[]>(`${ITEM_SELECT} WHERE i.item_id = ?`, [id]);
+    res.json(rows[0]);
+  } finally {
+    if (file && !saved) await removeUpload(file.filename);
+  }
+});
+
 // --- Not implemented yet -------------------------------------------------------------------
-// FR-04: edit. Only while status = 'Available' and item.center_id = req.user.centerId (or administrator).
-router.put("/:id", requireAuth, notImplemented("FR-04"));
 // FR-08: mark Returned. Set return_date = NOW(), returned_by = req.user.id. Update atomically (3.4.1).
 router.post("/:id/return", requireAuth, notImplemented("FR-08"));
 // FR-09: mark Removed (invalid / duplicate record) or Disposed (no longer stored).

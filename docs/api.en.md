@@ -16,7 +16,7 @@ REST API served by the Express server (`server/`). Request/response formats and 
 
 ### Request / response format
 
-- Request bodies and responses are JSON (`Content-Type: application/json`). The exception is item registration (`POST /api/items`), which takes `multipart/form-data` so that an image can be attached.
+- Request bodies and responses are JSON (`Content-Type: application/json`). The exceptions are item registration and editing (`POST /api/items`, `PUT /api/items/:id`), which take `multipart/form-data` so that an image can be attached.
 - JSON keys are camelCase (`operatingHours`, `foundDate`).
 - Coordinates are exchanged as two numbers: `lat` (latitude, -90 to 90) and `lng` (longitude, -180 to 180).
 - Dates: `DATE` values are `"YYYY-MM-DD"` strings, `DATETIME` values are `"YYYY-MM-DD HH:MM:SS"` strings.
@@ -46,11 +46,11 @@ Every failure uses the format below. The frontend can show the `error` string to
 |--------|---------|-----------------|
 | 400 | Invalid input | `name: String must contain at least 1 character(s)` |
 | 401 | Login required | `Login required.` |
-| 403 | Not allowed | `Administrator access required.`, `Only staff assigned to a center can register items.` |
-| 404 | Not found | `Center not found.` |
-| 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
+| 403 | Not allowed | `Administrator access required.`, `You can only edit items stored at your center.` |
+| 404 | Not found | `Center not found.`, `Item not found.` |
+| 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
 | 500 | Internal server error | `Internal server error.` |
-| 501 | API not implemented yet | `Not implemented yet (FR-04).` |
+| 501 | API not implemented yet | `Not implemented yet (FR-08).` |
 
 Input validation errors (400) report **only the first problem**, formatted as `"<field>: <reason>"`, even when there are several.
 
@@ -272,13 +272,55 @@ const item = await api("/items", { method: "POST", body: form }); // api() leave
 | 403 | Logged in as an administrator (no assigned center): `Only staff assigned to a center can register items.` |
 | 409 | The staff member's assigned center has been deleted: `Your assigned center has been deleted. Ask an administrator to reassign you.` |
 
+### `PUT /api/items/:id` — Staff (FR-04, FR-10)
+
+Edits an `Available` item.
+
+- Staff can edit items stored at their own center. Administrators can edit items at any center (FR-10).
+- Only `Available` items can be edited, by staff and administrators alike. `Returned`, `Removed` and `Disposed` items return **409**.
+- The storage center and the status are never changed by this API.
+- Request format is the same as `POST /api/items` (`multipart/form-data`, or JSON without an image), with the same field rules. All text fields are required, so a missing field is a 400 error and nothing is cleared by omission.
+- Image handling:
+
+| Request | Result |
+|---------|--------|
+| A new file in `image` | The image is replaced and the old file is deleted |
+| `removeImage=true` (no file) | The image is removed (`imageUrl` becomes `null`) and the old file is deleted |
+| Neither | The current image is kept |
+
+  If both a file and `removeImage=true` are sent, the new file wins.
+- Whether an administrator may edit non-`Available` items was not clear from the SRS (FR-04 vs FR-10); the team chose to allow only `Available` items for everyone.
+- If the request fails for any reason, a newly uploaded image is not kept and the current image is unchanged.
+
+```js
+const form = new FormData();
+form.append("name", "Black umbrella");
+form.append("category", "Umbrella");
+form.append("foundDate", "2026-11-22");
+form.append("foundLat", String(lat));
+form.append("foundLng", String(lng));
+form.append("description", "Long black umbrella found near E3");
+if (newFile) form.append("image", newFile);
+else if (removeCurrentImage) form.append("removeImage", "true");
+const item = await api(`/items/${id}`, { method: "PUT", body: form });
+```
+
+**200** + the updated `Item`
+
+| Failure | When |
+|---------|------|
+| 400 | Invalid input or rejected image (same messages as `POST /api/items`) |
+| 401 | Not logged in |
+| 403 | A staff member tries to edit an item stored at another center: `You can only edit items stored at your center.` |
+| 404 | No item with this id, or `:id` is not a positive integer: `Item not found.` |
+| 409 | The item is not `Available`: `Only Available items can be edited.` |
+
 ### Not implemented yet
 
 The APIs below exist only as placeholders and currently return **501**. Their formats will be added here as they are implemented.
 
 | API | Access | FR |
 |-----|--------|----|
-| `PUT /api/items/:id` | Staff | FR-04 Edit an item |
 | `POST /api/items/:id/return` | Staff | FR-08 Mark as Returned |
 | `POST /api/items/:id/remove` | Staff | FR-09 Mark as Removed |
 | `POST /api/items/:id/dispose` | Staff | FR-09 Mark as Disposed |

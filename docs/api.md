@@ -16,7 +16,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 ### 요청 / 응답 형식
 
-- 요청 본문과 응답은 JSON입니다 (`Content-Type: application/json`). 예외는 물품 등록(`POST /api/items`)으로, 이미지를 첨부할 수 있도록 `multipart/form-data`를 받습니다.
+- 요청 본문과 응답은 JSON입니다 (`Content-Type: application/json`). 예외는 물품 등록과 수정(`POST /api/items`, `PUT /api/items/:id`)으로, 이미지를 첨부할 수 있도록 `multipart/form-data`를 받습니다.
 - JSON 키는 camelCase입니다 (`operatingHours`, `foundDate`).
 - 좌표는 숫자 두 개 `lat`(위도, -90~90), `lng`(경도, -180~180)로 주고받습니다.
 - 날짜: `DATE`는 `"YYYY-MM-DD"`, `DATETIME`은 `"YYYY-MM-DD HH:MM:SS"` 문자열입니다.
@@ -46,11 +46,11 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 |-----------|------|-------------|
 | 400 | 입력값 오류 | `name: String must contain at least 1 character(s)` |
 | 401 | 로그인 필요 | `Login required.` |
-| 403 | 권한 없음 | `Administrator access required.`, `Only staff assigned to a center can register items.` |
-| 404 | 대상 없음 | `Center not found.` |
-| 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
+| 403 | 권한 없음 | `Administrator access required.`, `You can only edit items stored at your center.` |
+| 404 | 대상 없음 | `Center not found.`, `Item not found.` |
+| 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `Only Available items can be edited.` |
 | 500 | 서버 내부 오류 | `Internal server error.` |
-| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-04).` |
+| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-08).` |
 
 입력값 검사(400)는 문제가 여러 개여도 **첫 번째 문제 하나**만 `"<필드>: <이유>"` 형식으로 알려 줍니다.
 
@@ -272,13 +272,55 @@ const item = await api("/items", { method: "POST", body: form }); // FormData일
 | 403 | 관리자로 로그인함 (배정 센터 없음): `Only staff assigned to a center can register items.` |
 | 409 | 직원의 배정 센터가 삭제됨: `Your assigned center has been deleted. Ask an administrator to reassign you.` |
 
+### `PUT /api/items/:id` — Staff (FR-04, FR-10)
+
+`Available` 물품을 수정합니다.
+
+- 직원은 자기 센터에 보관된 물품을 수정할 수 있습니다. 관리자는 모든 센터의 물품을 수정할 수 있습니다 (FR-10).
+- 직원이든 관리자든 `Available` 물품만 수정할 수 있습니다. `Returned`, `Removed`, `Disposed` 물품은 **409**입니다.
+- 보관 센터와 상태는 이 API로 절대 바뀌지 않습니다.
+- 요청 형식과 필드 규칙은 `POST /api/items`와 같습니다 (`multipart/form-data`, 이미지가 없으면 JSON도 가능). 텍스트 필드가 모두 필수라서, 빠진 필드는 400 오류가 되고 빠뜨렸다고 지워지는 값은 없습니다.
+- 이미지 처리:
+
+| 요청 | 결과 |
+|------|------|
+| `image`에 새 파일 | 이미지 교체, 옛 파일 삭제 |
+| `removeImage=true` (파일 없음) | 이미지 제거 (`imageUrl`이 `null`), 옛 파일 삭제 |
+| 둘 다 없음 | 기존 이미지 유지 |
+
+  파일과 `removeImage=true`를 함께 보내면 새 파일이 우선입니다.
+- 관리자가 `Available`이 아닌 물품을 수정할 수 있는지는 SRS에서 분명하지 않아(FR-04와 FR-10), 팀에서 모두에게 `Available` 물품만 허용하기로 했습니다.
+- 요청이 어떤 이유로든 실패하면 새로 올린 이미지는 남지 않고, 기존 이미지도 그대로입니다.
+
+```js
+const form = new FormData();
+form.append("name", "Black umbrella");
+form.append("category", "Umbrella");
+form.append("foundDate", "2026-11-22");
+form.append("foundLat", String(lat));
+form.append("foundLng", String(lng));
+form.append("description", "Long black umbrella found near E3");
+if (newFile) form.append("image", newFile);
+else if (removeCurrentImage) form.append("removeImage", "true");
+const item = await api(`/items/${id}`, { method: "PUT", body: form });
+```
+
+**200** + 수정된 `Item`
+
+| 실패 | 경우 |
+|------|------|
+| 400 | 입력값 오류 또는 이미지 거절 (`POST /api/items`와 같은 메시지) |
+| 401 | 로그인 안 함 |
+| 403 | 직원이 다른 센터에 보관된 물품을 수정하려 함: `You can only edit items stored at your center.` |
+| 404 | 해당 id의 물품이 없음, 또는 `:id`가 양의 정수가 아님: `Item not found.` |
+| 409 | 물품이 `Available`이 아님: `Only Available items can be edited.` |
+
 ### 미구현 API
 
 아래 API는 자리만 있고 현재 **501**을 응답합니다. 구현하면서 이 문서에 형식을 채워 넣습니다.
 
 | API | 권한 | FR |
 |-----|------|----|
-| `PUT /api/items/:id` | Staff | FR-04 물품 수정 |
 | `POST /api/items/:id/return` | Staff | FR-08 반환 처리 |
 | `POST /api/items/:id/remove` | Staff | FR-09 Removed 처리 |
 | `POST /api/items/:id/dispose` | Staff | FR-09 Disposed 처리 |

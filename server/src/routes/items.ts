@@ -1,10 +1,11 @@
 import { Router } from "express";
-import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { z } from "zod";
 import { CATEGORIES, ITEM_STATUSES } from "../constants";
 import { pool } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { notImplemented, parseId } from "../utils";
+import { removeUpload, uploadImage } from "../middleware/upload";
+import { notImplemented, parseBody, parseId } from "../utils";
 
 const router = Router();
 
@@ -18,6 +19,38 @@ const ITEM_SELECT = `
   JOIN center c ON c.center_id = i.center_id`;
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+// "2026-02-30" matches the YYYY-MM-DD pattern but is not a real day.
+function isRealDate(value: string): boolean {
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+// FR-03 "the found date cannot be in the future": "today" is the date on campus (Korea),
+// independent of the server's or the database's time zone.
+function todayInKorea(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
+// Form fields arrive as strings in multipart/form-data. Convert "36.37" to 36.37,
+// but keep "" as a string so an empty field is rejected instead of silently becoming 0.
+const coordinate = (min: number, max: number) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : v),
+    z.number().min(min).max(max),
+  );
+
+// FR-03: fields entered by staff. The storage center and status are set by the server.
+const itemCreateInput = z.object({
+  name: z.string().trim().min(1).max(255),
+  category: z.enum(CATEGORIES),
+  foundDate: date
+    .refine(isRealDate, "Invalid date")
+    .refine((d) => d <= todayInKorea(), "Found date cannot be in the future"),
+  foundLat: coordinate(-90, 90),
+  foundLng: coordinate(-180, 180),
+  description: z.string().trim().min(1),
+});
 
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
@@ -96,11 +129,47 @@ router.get("/:id", async (req, res) => {
   res.json(item);
 });
 
+// FR-03: a staff member registers a found item at their own center, with one optional JPG/PNG image.
+// Administrators have no assigned center and cannot register items. Storage center and status are set by the server.
+router.post("/", requireAuth, uploadImage, async (req, res) => {
+  // uploadImage has already saved the image (if one was sent). Delete it again unless the item
+  // is saved, so a rejected request leaves no orphan file behind (SRS 3.4.1).
+  const file = req.file;
+  let saved = false;
+  try {
+    const user = req.user!; // requireAuth has already rejected requests without a logged-in user
+    if (user.centerId === null) {
+      res.status(403).json({ error: "Only staff assigned to a center can register items." });
+      return;
+    }
+
+    const it = parseBody(itemCreateInput, req.body, res);
+    if (it === null) return;
+
+    // FR-02: a deleted center no longer takes new items, so insert only while the center is active.
+    const [result] = await pool.query<ResultSetHeader>(
+      `INSERT INTO item (center_id, registered_by, name, category, found_date, found_location, description, image, status)
+       SELECT center_id, ?, ?, ?, ?, POINT(?, ?), ?, ?, 'Available'
+       FROM center WHERE center_id = ? AND deleted_at IS NULL`,
+      [
+        user.id, it.name, it.category, it.foundDate, it.foundLng, it.foundLat, it.description,
+        file?.filename ?? null, user.centerId,
+      ],
+    );
+    if (result.affectedRows === 0) {
+      res.status(409).json({ error: "Your assigned center has been deleted. Ask an administrator to reassign you." });
+      return;
+    }
+    saved = true;
+
+    const [rows] = await pool.query<RowDataPacket[]>(`${ITEM_SELECT} WHERE i.item_id = ?`, [result.insertId]);
+    res.status(201).json(rows[0]);
+  } finally {
+    if (file && !saved) await removeUpload(file.filename);
+  }
+});
+
 // --- Not implemented yet -------------------------------------------------------------------
-// FR-03: register. Use uploadImage middleware (src/middleware/upload.ts). Validate: name, category,
-//        found date (not in the future), found location (lng/lat), description. Storage center =
-//        req.user.centerId (not editable). New items start as 'Available'. Administrators: decide which center.
-router.post("/", requireAuth, notImplemented("FR-03"));
 // FR-04: edit. Only while status = 'Available' and item.center_id = req.user.centerId (or administrator).
 router.put("/:id", requireAuth, notImplemented("FR-04"));
 // FR-08: mark Returned. Set return_date = NOW(), returned_by = req.user.id. Update atomically (3.4.1).

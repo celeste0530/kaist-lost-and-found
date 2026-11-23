@@ -16,7 +16,7 @@ REST API served by the Express server (`server/`). Request/response formats and 
 
 ### Request / response format
 
-- Request bodies and responses are JSON (`Content-Type: application/json`). Only APIs with image upload use `multipart/form-data` (FR-03/04, not implemented yet).
+- Request bodies and responses are JSON (`Content-Type: application/json`). The exception is item registration (`POST /api/items`), which takes `multipart/form-data` so that an image can be attached.
 - JSON keys are camelCase (`operatingHours`, `foundDate`).
 - Coordinates are exchanged as two numbers: `lat` (latitude, -90 to 90) and `lng` (longitude, -180 to 180).
 - Dates: `DATE` values are `"YYYY-MM-DD"` strings, `DATETIME` values are `"YYYY-MM-DD HH:MM:SS"` strings.
@@ -46,11 +46,11 @@ Every failure uses the format below. The frontend can show the `error` string to
 |--------|---------|-----------------|
 | 400 | Invalid input | `name: String must contain at least 1 character(s)` |
 | 401 | Login required | `Login required.` |
-| 403 | Not allowed | `Administrator access required.` |
+| 403 | Not allowed | `Administrator access required.`, `Only staff assigned to a center can register items.` |
 | 404 | Not found | `Center not found.` |
 | 409 | Conflicts with the current state | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
 | 500 | Internal server error | `Internal server error.` |
-| 501 | API not implemented yet | `Not implemented yet (FR-03).` |
+| 501 | API not implemented yet | `Not implemented yet (FR-04).` |
 
 Input validation errors (400) report **only the first problem**, formatted as `"<field>: <reason>"`, even when there are several.
 
@@ -229,13 +229,55 @@ Example: `/api/items?q=wallet&category=Wallet/Card&centerId=1`
 
 **200** + `Item`. Public users can only see `Available` items; any other status returns **404** `Item not found.` (Staff can see every status.)
 
+### `POST /api/items` — Staff (FR-03)
+
+Registers a found item at the logged-in staff member's center.
+
+- Only staff accounts assigned to a center can register items. Administrators have no assigned center and get **403**.
+- The storage center is always the staff member's assigned center; a `centerId` in the request is ignored (FR-03: not editable by staff). New items always start as `Available`.
+- Send `multipart/form-data` (`FormData`) to attach an image. All form fields arrive as strings; the server converts the coordinates to numbers. Without an image, a JSON body also works.
+
+| Field | Type | Required | Rules |
+|-------|------|----------|-------|
+| `name` | string | ✅ | 1–255 characters after trimming |
+| `category` | string | ✅ | One of the categories listed under the Item object |
+| `foundDate` | string | ✅ | `YYYY-MM-DD`, a real calendar date, not later than today in Korea time (Asia/Seoul) |
+| `foundLat` | number | ✅ | -90 to 90 (in a form, a numeric string such as `"36.3686"`; an empty value is rejected, not read as 0) |
+| `foundLng` | number | ✅ | -180 to 180 (same as `foundLat`) |
+| `description` | string | ✅ | At least 1 character after trimming, no length limit |
+| `image` | file | | One JPG or PNG file, up to 10 MB, in the form field `image` |
+
+- Rules that the SRS does not state, decided during development: impossible dates such as `2026-02-30` are rejected; "today" for the future-date check is the Korean date, whatever the server's or database's time zone; only staff (not administrators) can register.
+- The file type is checked with the MIME type the browser sends (`image/jpeg`, `image/png`); the file content itself is not inspected.
+- If the request fails for any reason, the uploaded image is not kept.
+
+```js
+const form = new FormData();
+form.append("name", "Black umbrella");
+form.append("category", "Umbrella");
+form.append("foundDate", "2026-11-22");
+form.append("foundLat", String(lat));
+form.append("foundLng", String(lng));
+form.append("description", "Long black umbrella found near E3");
+if (file) form.append("image", file);
+const item = await api("/items", { method: "POST", body: form }); // api() leaves Content-Type to the browser for FormData
+```
+
+**201** + the created `Item` (`imageUrl` is the stored file name, or `null` without an image)
+
+| Failure | When |
+|---------|------|
+| 400 | Invalid input, e.g. `name: String must contain at least 1 character(s)`, `foundDate: Found date cannot be in the future`, `foundDate: Invalid date`; or a rejected image: `image: Only JPG or PNG images are allowed.`, `image: Image must be 10 MB or smaller.` |
+| 401 | Not logged in |
+| 403 | Logged in as an administrator (no assigned center): `Only staff assigned to a center can register items.` |
+| 409 | The staff member's assigned center has been deleted: `Your assigned center has been deleted. Ask an administrator to reassign you.` |
+
 ### Not implemented yet
 
 The APIs below exist only as placeholders and currently return **501**. Their formats will be added here as they are implemented.
 
 | API | Access | FR |
 |-----|--------|----|
-| `POST /api/items` | Staff | FR-03 Register an item |
 | `PUT /api/items/:id` | Staff | FR-04 Edit an item |
 | `POST /api/items/:id/return` | Staff | FR-08 Mark as Returned |
 | `POST /api/items/:id/remove` | Staff | FR-09 Mark as Removed |

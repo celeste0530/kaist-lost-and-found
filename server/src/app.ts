@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "node:path";
 import { config } from "./config";
 import { attachUser } from "./middleware/auth";
+import { UploadError } from "./middleware/upload";
 import authRouter from "./routes/auth";
 import centersRouter from "./routes/centers";
 import itemsRouter from "./routes/items";
@@ -33,6 +34,12 @@ app.use("/api", (_req, res) => {
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
+    // e.g. file over 10 MB. multer has already deleted the partial file.
+    const message = err.code === "LIMIT_FILE_SIZE" ? "image: Image must be 10 MB or smaller." : err.message;
+    res.status(400).json({ error: message });
+    return;
+  }
+  if (err instanceof UploadError) {
     res.status(400).json({ error: err.message });
     return;
   }

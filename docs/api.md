@@ -16,11 +16,11 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 ### 요청 / 응답 형식
 
-- 요청 본문과 응답은 JSON입니다 (`Content-Type: application/json`). 이미지 업로드가 있는 API만 `multipart/form-data`를 씁니다 (FR-03/04, 아직 미구현).
+- 요청 본문과 응답은 JSON입니다 (`Content-Type: application/json`). 예외는 물품 등록(`POST /api/items`)으로, 이미지를 첨부할 수 있도록 `multipart/form-data`를 받습니다.
 - JSON 키는 camelCase입니다 (`operatingHours`, `foundDate`).
 - 좌표는 숫자 두 개 `lat`(위도, -90~90), `lng`(경도, -180~180)로 주고받습니다.
 - 날짜: `DATE`는 `"YYYY-MM-DD"`, `DATETIME`은 `"YYYY-MM-DD HH:MM:SS"` 문자열입니다.
-  - ⚠️ 현재 개발용 MySQL 컨테이너의 시간대가 UTC라서, `DATETIME` 값(등록일, 반환일 등)은 한국 시각보다 9시간 이릅니다. 처리 방식은 팀에서 결정 예정입니다.
+  - ⚠️ 현재 개발용 MySQL 컨테이너의 시간대가 UTC라서, `DATETIME` 값(등록일, 반환일 등)은 한국 시각보다 9시간 이릅니다. 처리 방식은 아직 팀에서 정하지 않았습니다.
 
 ### 인증
 
@@ -46,11 +46,11 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 |-----------|------|-------------|
 | 400 | 입력값 오류 | `name: String must contain at least 1 character(s)` |
 | 401 | 로그인 필요 | `Login required.` |
-| 403 | 권한 없음 | `Administrator access required.` |
+| 403 | 권한 없음 | `Administrator access required.`, `Only staff assigned to a center can register items.` |
 | 404 | 대상 없음 | `Center not found.` |
 | 409 | 현재 상태와 충돌 | `This center still has Available items and cannot be deleted.`, `email: This email is already in use.` |
 | 500 | 서버 내부 오류 | `Internal server error.` |
-| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-03).` |
+| 501 | 아직 구현되지 않은 API | `Not implemented yet (FR-04).` |
 
 입력값 검사(400)는 문제가 여러 개여도 **첫 번째 문제 하나**만 `"<필드>: <이유>"` 형식으로 알려 줍니다.
 
@@ -229,13 +229,55 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 **200** + `Item`. 일반 사용자에게는 `Available`인 물품만 보이고, 그 외 상태는 **404** `Item not found.` (Staff는 모든 상태 조회 가능)
 
+### `POST /api/items` — Staff (FR-03)
+
+로그인한 직원의 센터에 습득물을 등록합니다.
+
+- 센터에 배정된 직원 계정만 등록할 수 있습니다. 관리자는 배정 센터가 없어서 **403**입니다.
+- 보관 센터는 항상 직원의 배정 센터이며, 요청에 `centerId`를 넣어도 무시됩니다 (FR-03: 직원이 수정할 수 없음). 새 물품은 항상 `Available`로 시작합니다.
+- 이미지를 첨부하려면 `multipart/form-data`(`FormData`)로 보내 주세요. 폼 필드는 모두 문자열로 전달되고, 좌표는 서버가 숫자로 변환합니다. 이미지가 없으면 JSON 본문으로 보내도 됩니다.
+
+| 필드 | 타입 | 필수 | 규칙 |
+|------|------|------|------|
+| `name` | string | ✅ | 앞뒤 공백 제거 후 1~255자 |
+| `category` | string | ✅ | Item 객체에 적힌 카테고리 중 하나 |
+| `foundDate` | string | ✅ | `YYYY-MM-DD`, 실제로 존재하는 날짜, 한국 시간(Asia/Seoul) 기준 오늘 이후 불가 |
+| `foundLat` | number | ✅ | -90 ~ 90 (폼에서는 `"36.3686"` 같은 숫자 문자열. 빈 값은 0으로 처리되지 않고 거절됨) |
+| `foundLng` | number | ✅ | -180 ~ 180 (`foundLat`과 같음) |
+| `description` | string | ✅ | 앞뒤 공백 제거 후 1자 이상, 길이 제한 없음 |
+| `image` | file | | JPG 또는 PNG 파일 1개, 최대 10MB, 폼 필드 이름은 `image` |
+
+- SRS에 명시되지 않아 개발 중에 정한 규칙: `2026-02-30`처럼 없는 날짜는 거절, 미래 날짜 검사의 "오늘"은 서버·DB 시간대와 관계없이 한국 날짜, 관리자가 아닌 직원만 등록 가능.
+- 파일 형식은 브라우저가 보내는 MIME 타입(`image/jpeg`, `image/png`)으로 확인하며, 파일 내용 자체는 검사하지 않습니다.
+- 요청이 어떤 이유로든 실패하면 업로드된 이미지는 남지 않습니다.
+
+```js
+const form = new FormData();
+form.append("name", "Black umbrella");
+form.append("category", "Umbrella");
+form.append("foundDate", "2026-11-22");
+form.append("foundLat", String(lat));
+form.append("foundLng", String(lng));
+form.append("description", "Long black umbrella found near E3");
+if (file) form.append("image", file);
+const item = await api("/items", { method: "POST", body: form }); // FormData일 때 api()는 Content-Type을 브라우저에 맡김
+```
+
+**201** + 생성된 `Item` (`imageUrl`은 저장된 파일 이름, 이미지가 없으면 `null`)
+
+| 실패 | 경우 |
+|------|------|
+| 400 | 입력값 오류. 예: `name: String must contain at least 1 character(s)`, `foundDate: Found date cannot be in the future`, `foundDate: Invalid date`. 또는 이미지 거절: `image: Only JPG or PNG images are allowed.`, `image: Image must be 10 MB or smaller.` |
+| 401 | 로그인 안 함 |
+| 403 | 관리자로 로그인함 (배정 센터 없음): `Only staff assigned to a center can register items.` |
+| 409 | 직원의 배정 센터가 삭제됨: `Your assigned center has been deleted. Ask an administrator to reassign you.` |
+
 ### 미구현 API
 
 아래 API는 자리만 있고 현재 **501**을 응답합니다. 구현하면서 이 문서에 형식을 채워 넣습니다.
 
 | API | 권한 | FR |
 |-----|------|----|
-| `POST /api/items` | Staff | FR-03 물품 등록 |
 | `PUT /api/items/:id` | Staff | FR-04 물품 수정 |
 | `POST /api/items/:id/return` | Staff | FR-08 반환 처리 |
 | `POST /api/items/:id/remove` | Staff | FR-09 Removed 처리 |

@@ -71,7 +71,8 @@ npm run dev                                                 # http://localhost:5
 ```
 
 - 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d`
-- 센터는 관리자 계정으로 `POST /api/centers`를 호출해 만들 수 있습니다([API 명세](docs/api.en.md) 참고). 물품 등록 API는 아직 없으므로(아래 표 참고) 물품은 DB에 직접 넣어야 목록 화면에 보입니다.
+- 데이터 넣는 순서: 관리자 계정으로 센터(`POST /api/centers`)와 직원 계정(`POST /api/staff`)을 만든 뒤, 직원 계정으로 로그인해 물품(`POST /api/items`)을 등록합니다. 요청 형식은 [API 명세](docs/api.en.md)를 참고하세요.
+- 업로드된 이미지는 `server/uploads/`에 저장됩니다(git에는 올라가지 않음).
 
 ## 구현 현황
 
@@ -79,7 +80,7 @@ npm run dev                                                 # http://localhost:5
 |----|------|------|
 | FR-01 | 직원 로그인/로그아웃 | 구현됨 |
 | FR-02 | 센터 관리 | 구현됨 (생성/수정/삭제, 삭제는 소프트 삭제 + Available 물품 있으면 거절) |
-| FR-03 | 습득물 등록 | TODO |
+| FR-03 | 습득물 등록 | 구현됨 (센터에 배정된 직원만, 이미지 JPG/PNG 10MB 선택, 보관 센터는 직원의 배정 센터로 자동 지정) |
 | FR-04 | 습득물 수정 | TODO |
 | FR-05 | 검색/필터 | 키워드·카테고리·날짜·센터·좌표(bbox) API 구현, 화면은 키워드·카테고리만 |
 | FR-06 | 습득물 상세 | 구현됨 |
@@ -96,5 +97,5 @@ npm run dev                                                 # http://localhost:5
 
 | # | 주제 | 현재 상태 / 문제 |
 |---|------|------------------|
-| 1 | **시간대 (UTC vs KST)** | 개발용 MySQL 컨테이너가 UTC로 동작해서 `NOW()`, `CURRENT_TIMESTAMP`로 저장되는 시각(등록일, 반환일, 센터 삭제 시각)이 한국 시각보다 9시간 이릅니다. DB를 KST로 맞출지, UTC로 저장하고 화면에서 변환할지 정해야 합니다. |
+| 1 | **시간대 (UTC vs KST)** | 개발용 MySQL 컨테이너가 UTC로 동작해서 `NOW()`, `CURRENT_TIMESTAMP`로 저장되는 시각(등록일, 반환일, 센터 삭제 시각)이 한국 시각보다 9시간 이릅니다. DB를 KST로 맞출지, UTC로 저장하고 화면에서 변환할지 정해야 합니다. (물품 등록의 미래 날짜 검사는 이와 별개로 서버 코드에서 한국 날짜를 기준으로 합니다.) |
 | 2 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |

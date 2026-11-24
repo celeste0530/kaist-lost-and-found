@@ -350,7 +350,7 @@ Marks an `Available` item as `Removed` or `Disposed`. No request body.
 
 - Same rules as `POST /api/items/:id/return`: staff can change items stored at their own center, administrators at any center (FR-10); only `Available` items can be changed (3.5.3), otherwise **409**; the change runs in a transaction with a row lock.
 - The record is kept. The item disappears from public search, the map and public details, but staff can still find it with `GET /api/items?status=Removed` or `?status=Disposed`.
-- Unlike a return, **who made the change and when is not recorded**: the schema has no column for it (only `return_date` / `returned_by`, which stay `null`). The SRS mentions a status history (2.1.4), but how to store it has not been decided.
+- `return_date` / `returned_by` stay `null`. Who made the change and when is recorded in the `item_status_history` table instead (SRS 2.1.4), like every status change including registration and returns. The history is not exposed through the API yet.
 
 ```js
 const item = await api(`/items/${id}/dispose`, { method: "POST" }); // or `/items/${id}/remove`

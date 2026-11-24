@@ -95,7 +95,7 @@ npm run dev                                                 # http://localhost:5
 | FR-06 | 습득물 상세 | 구현됨 |
 | FR-07 | 지도 탐색 | 기본 구현, 겹치는 마커 처리 TODO |
 | FR-08 | 반환 처리 | 구현됨 (Available 물품만, 반환일·처리자 기록, 직원은 자기 센터 물품, 관리자는 모든 센터 물품) |
-| FR-09 | 삭제/폐기 처리 | 구현됨 (Available 물품만 Removed/Disposed로, 기록은 보존. 처리자·처리 시각은 기록하지 않음) |
+| FR-09 | 삭제/폐기 처리 | 구현됨 (Available 물품만 Removed/Disposed로, 기록은 보존. 처리자·처리 시각은 상태 이력 테이블에 기록) |
 | FR-10 | 관리자 관리 | 일부 구현: 센터 관리(FR-02), 직원 계정 목록/생성/수정, 관리자의 물품 수정(FR-04)·상태 변경(FR-08/09) 완료. 직원 비활성화 TODO |
 
 자세한 매핑과 SRS 해석 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md)를, API 요청/응답 형식은 [`docs/api.en.md`](docs/api.en.md)(한국어 번역: [`docs/api.md`](docs/api.md))를 참고하세요.
@@ -106,5 +106,4 @@ npm run dev                                                 # http://localhost:5
 
 | # | 주제 | 현재 상태 / 문제 |
 |---|------|------------------|
-| 1 | **시간대 (UTC vs KST)** | 개발용 MySQL 컨테이너가 UTC로 동작해서 `NOW()`, `CURRENT_TIMESTAMP`로 저장되는 시각(등록일, 반환일, 센터 삭제 시각)이 한국 시각보다 9시간 이릅니다. DB를 KST로 맞출지, UTC로 저장하고 화면에서 변환할지 정해야 합니다. (물품 등록의 미래 날짜 검사는 이와 별개로 서버 코드에서 한국 날짜를 기준으로 합니다.) |
-| 2 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |
+| 1 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |

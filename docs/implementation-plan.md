@@ -4,24 +4,26 @@ SRS v1.1 요구사항을 API / 화면 / 코드 위치에 매핑한 표와, 스�
 
 ## FR 매핑
 
-| FR | API | 화면 | 코드 | 상태 |
-|----|-----|------|------|------|
-| FR-01 로그인 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | StaffLogin | `server/src/routes/auth.ts` | 구현 |
-| FR-02 센터 관리 | `GET/POST/PUT/DELETE /api/centers` | CenterList, CenterDetails, AdminPage | `server/src/routes/centers.ts` | 조회만 |
-| FR-03 등록 | `POST /api/items` | ItemForm | `server/src/routes/items.ts`, `middleware/upload.ts` | TODO |
-| FR-04 수정 | `PUT /api/items/:id` | ItemForm | `server/src/routes/items.ts` | TODO |
-| FR-05 검색/필터 | `GET /api/items` | LostItemList | `server/src/routes/items.ts` | 구현(UI 일부) |
-| FR-06 상세 | `GET /api/items/:id` | ItemDetails | `server/src/routes/items.ts` | 구현 |
-| FR-07 지도 | `GET /api/items`, `GET /api/centers` | LostItemMap | `client/src/pages/LostItemMap.tsx` | 기본 구현 |
-| FR-08 반환 | `POST /api/items/:id/return` | CenterInventory | `server/src/routes/items.ts` | TODO |
-| FR-09 삭제/폐기 | `POST /api/items/:id/remove`, `/dispose` | CenterInventory | `server/src/routes/items.ts` | TODO |
-| FR-10 관리자 | `/api/staff`, `/api/centers` | AdminPage | `server/src/routes/staff.ts` | TODO |
+| FR | API | 화면 | 코드 | API 상태 | 화면 상태 |
+|----|-----|------|------|----------|-----------|
+| FR-01 로그인 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | StaffLogin | `server/src/routes/auth.ts` | 구현 | 구현 |
+| FR-02 센터 관리 | `GET/POST/PUT/DELETE /api/centers` | CenterList, CenterDetails, AdminPage | `server/src/routes/centers.ts` | 구현 | 조회만 (AdminPage TODO) |
+| FR-03 등록 | `POST /api/items` | ItemForm | `server/src/routes/items.ts`, `middleware/upload.ts` | 구현 (상태 이력 기록) | TODO |
+| FR-04 수정 | `PUT /api/items/:id` | ItemForm | `server/src/routes/items.ts` | 구현 | TODO |
+| FR-05 검색/필터 | `GET /api/items` | LostItemList | `server/src/routes/items.ts` | 구현 | 키워드·카테고리만 (날짜·위치·센터 TODO) |
+| FR-06 상세 | `GET /api/items/:id` | ItemDetails | `server/src/routes/items.ts` | 구현 | 구현 |
+| FR-07 지도 | `GET /api/items`, `GET /api/centers` | LostItemMap | `client/src/pages/LostItemMap.tsx` | 구현 | 기본 구현 (마커 겹침 TODO) |
+| FR-08 반환 | `POST /api/items/:id/return` | CenterInventory | `server/src/routes/items.ts` | 구현 (상태 이력 기록) | TODO |
+| FR-09 삭제/폐기 | `POST /api/items/:id/remove`, `/dispose` | CenterInventory | `server/src/routes/items.ts` | 구현 (상태 이력 기록) | TODO |
+| FR-10 관리자 | `/api/staff`, `/api/centers` | AdminPage | `server/src/routes/staff.ts` | 일부 (직원 비활성화 TODO) | TODO |
 
 ## 권장 구현 순서
 
-1. FR-02 센터 CRUD + FR-10 직원 계정 (데이터를 넣을 수 있어야 나머지를 확인 가능)
-2. FR-03 등록 + FR-04 수정 (이미지 업로드, 지도에서 위치 선택)
-3. FR-08 / FR-09 상태 변경 (원자적 업데이트, 3.4.1)
+서버 API(FR-01 ~ FR-10)는 직원 비활성화를 빼고 구현되어 있습니다. 남은 작업은 주로 화면입니다.
+
+1. ItemForm: FR-03 등록 + FR-04 수정 (이미지 업로드, 지도에서 위치 선택)
+2. CenterInventory: 자기 센터 물품 목록 + FR-08 반환 / FR-09 삭제·폐기
+3. AdminPage: FR-02 센터 CRUD + FR-10 직원 계정 관리
 4. FR-05 화면 필터 보완, FR-07 마커 겹침 처리
 5. 테스트 케이스(SRS 3.7.2) 자동화, 성능 확인(3.2: 1,000건 / 동시 5명 / 95%가 2초 이내)
 

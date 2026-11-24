@@ -350,7 +350,7 @@ const item = await api(`/items/${id}/return`, { method: "POST" });
 
 - 규칙은 `POST /api/items/:id/return`과 같습니다. 직원은 자기 센터 물품, 관리자는 모든 센터 물품을 처리할 수 있고(FR-10), `Available` 물품만 처리할 수 있으며(3.5.3) 그 외는 **409**, 행 잠금을 건 트랜잭션으로 처리됩니다.
 - 기록은 남습니다. 공개 검색, 지도, 공개 상세에서는 사라지지만, 직원은 `GET /api/items?status=Removed` 또는 `?status=Disposed`로 찾을 수 있습니다.
-- 반환과 달리 **누가·언제 처리했는지는 기록되지 않습니다.** 스키마에 해당 칸이 없기 때문입니다(`return_date` / `returned_by`만 있고 이 값은 `null`로 남음). SRS는 상태 이력(2.1.4)을 언급하지만, 저장 방식은 아직 정하지 않았습니다.
+- `return_date` / `returned_by`는 `null`로 남습니다. 대신 누가·언제 처리했는지는 `item_status_history` 테이블에 기록됩니다(SRS 2.1.4). 등록과 반환을 포함한 모든 상태 변경이 같은 방식으로 기록됩니다. 이력을 조회하는 API는 아직 없습니다.
 
 ```js
 const item = await api(`/items/${id}/dispose`, { method: "POST" }); // 또는 `/items/${id}/remove`

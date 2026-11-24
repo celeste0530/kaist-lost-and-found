@@ -44,7 +44,8 @@ SRS에는 스택이 정해져 있지 않아(2.1.4) 아래 기본값으로 시작
 │       ├── routes/    auth, items, centers, staff
 │       ├── middleware/ auth(인증/권한), upload(JPG/PNG 10MB)
 │       └── scripts/   createAdmin (최초 관리자 생성)
-├── db/schema.sql      SRS 3.3 기반 DB 스키마
+├── db/schema.sql      SRS 3.3 기반 DB 스키마 (+ 상태 이력 테이블)
+├── db/seed.sql        개발용 샘플 데이터
 ├── docs/              SRS, 구현 계획(FR 매핑 + SRS 해석 메모), API 명세(api.en.md 기준, api.md 번역)
 └── docker-compose.yml 개발용 MySQL
 ```
@@ -70,24 +71,32 @@ npm install
 npm run dev                                                 # http://localhost:5173
 ```
 
-- 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d`
-- 데이터 넣는 순서: 관리자 계정으로 센터(`POST /api/centers`)와 직원 계정(`POST /api/staff`)을 만든 뒤, 직원 계정으로 로그인해 물품(`POST /api/items`)을 등록합니다. 요청 형식은 [API 명세](docs/api.en.md)를 참고하세요.
+- 스키마를 다시 적용하려면 `docker compose down -v` 후 `docker compose up -d` (로컬 DB 데이터가 모두 지워짐)
+- DB의 날짜·시간은 모두 한국 시간(KST, `+09:00`) 기준입니다.
+- DB를 처음 만들 때 [`db/seed.sql`](db/seed.sql)의 샘플 데이터가 함께 들어갑니다: 센터 5개(1개는 삭제됨), 물품 28개(Available 17 / Returned 5 / Removed 2 / Disposed 4).
+- 샘플 계정 (**로컬 개발 전용**, 비밀번호는 모두 `password1234`). 시드를 쓰면 `create-admin`은 건너뛰어도 됩니다.
+
+  | 이메일 | 역할 | 센터 |
+  |--------|------|------|
+  | `admin@lostfound.test` | Administrator | - |
+  | `staff1@lostfound.test` ~ `staff4@lostfound.test` | Staff | 1 ~ 4 |
+- 시드 없이 직접 데이터를 넣으려면: 관리자 계정으로 센터(`POST /api/centers`)와 직원 계정(`POST /api/staff`)을 만든 뒤, 직원 계정으로 로그인해 물품(`POST /api/items`)을 등록합니다. 요청 형식은 [API 명세](docs/api.en.md)를 참고하세요.
 - 업로드된 이미지는 `server/uploads/`에 저장됩니다(git에는 올라가지 않음).
 
 ## 구현 현황
 
-| FR | 내용 | 상태 |
-|----|------|------|
-| FR-01 | 직원 로그인/로그아웃 | 구현됨 |
-| FR-02 | 센터 관리 | 구현됨 (생성/수정/삭제, 삭제는 소프트 삭제 + Available 물품 있으면 거절) |
-| FR-03 | 습득물 등록 | 구현됨 (센터에 배정된 직원만, 이미지 JPG/PNG 10MB 선택, 보관 센터는 직원의 배정 센터로 자동 지정) |
-| FR-04 | 습득물 수정 | 구현됨 (Available 물품만, 직원은 자기 센터 물품, 관리자는 모든 센터 물품. 이미지 교체/유지/삭제) |
-| FR-05 | 검색/필터 | 키워드·카테고리·날짜·센터·좌표(bbox) API 구현, 화면은 키워드·카테고리만 |
-| FR-06 | 습득물 상세 | 구현됨 |
-| FR-07 | 지도 탐색 | 기본 구현, 겹치는 마커 처리 TODO |
-| FR-08 | 반환 처리 | 구현됨 (Available 물품만, 반환일·처리자 기록, 직원은 자기 센터 물품, 관리자는 모든 센터 물품) |
-| FR-09 | 삭제/폐기 처리 | 구현됨 (Available 물품만 Removed/Disposed로, 기록은 보존. 처리자·처리 시각은 기록하지 않음) |
-| FR-10 | 관리자 관리 | 일부 구현: 센터 관리(FR-02), 직원 계정 목록/생성/수정, 관리자의 물품 수정(FR-04)·상태 변경(FR-08/09) 완료. 직원 비활성화 TODO |
+| FR | 내용 | API | 화면 |
+|----|------|-----|------|
+| FR-01 | 직원 로그인/로그아웃 | 구현됨 | 구현됨 |
+| FR-02 | 센터 관리 | 구현됨 (생성/수정/삭제, 삭제는 소프트 삭제 + Available 물품 있으면 거절) | 조회만 (AdminPage TODO) |
+| FR-03 | 습득물 등록 | 구현됨 (센터에 배정된 직원만, 이미지 JPG/PNG 10MB 선택, 보관 센터는 직원의 배정 센터로 자동 지정) | TODO (ItemForm) |
+| FR-04 | 습득물 수정 | 구현됨 (Available 물품만, 직원은 자기 센터 물품, 관리자는 모든 센터 물품. 이미지 교체/유지/삭제) | TODO (ItemForm) |
+| FR-05 | 검색/필터 | 구현됨 (키워드·카테고리·날짜·센터·좌표(bbox)) | 키워드·카테고리만 |
+| FR-06 | 습득물 상세 | 구현됨 | 구현됨 |
+| FR-07 | 지도 탐색 | 구현됨 | 기본 구현, 겹치는 마커 처리 TODO |
+| FR-08 | 반환 처리 | 구현됨 (Available 물품만, 반환일·처리자 기록, 직원은 자기 센터 물품, 관리자는 모든 센터 물품) | TODO (CenterInventory) |
+| FR-09 | 삭제/폐기 처리 | 구현됨 (Available 물품만 Removed/Disposed로, 기록은 보존. 처리자·처리 시각은 상태 이력 테이블에 기록) | TODO (CenterInventory) |
+| FR-10 | 관리자 관리 | 일부 구현: 센터 관리(FR-02), 직원 계정 목록/생성/수정, 관리자의 물품 수정(FR-04)·상태 변경(FR-08/09) 완료. 직원 비활성화 TODO | TODO (AdminPage) |
 
 자세한 매핑과 SRS 해석 메모는 [`docs/implementation-plan.md`](docs/implementation-plan.md)를, API 요청/응답 형식은 [`docs/api.en.md`](docs/api.en.md)(한국어 번역: [`docs/api.md`](docs/api.md))를 참고하세요.
 
@@ -97,5 +106,4 @@ npm run dev                                                 # http://localhost:5
 
 | # | 주제 | 현재 상태 / 문제 |
 |---|------|------------------|
-| 1 | **시간대 (UTC vs KST)** | 개발용 MySQL 컨테이너가 UTC로 동작해서 `NOW()`, `CURRENT_TIMESTAMP`로 저장되는 시각(등록일, 반환일, 센터 삭제 시각)이 한국 시각보다 9시간 이릅니다. DB를 KST로 맞출지, UTC로 저장하고 화면에서 변환할지 정해야 합니다. (물품 등록의 미래 날짜 검사는 이와 별개로 서버 코드에서 한국 날짜를 기준으로 합니다.) |
-| 2 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |
+| 1 | **수정 API 방식 (PUT vs PATCH)** | `PUT /api/centers/:id`는 전체 교체라서 빠뜨린 선택 필드(`phone` 등)가 `null`로 지워집니다. 부분 수정(PATCH)으로 바꾸거나, PUT에서 모든 필드를 필수로 받는 방법이 있습니다. |

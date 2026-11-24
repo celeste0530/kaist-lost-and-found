@@ -1,4 +1,5 @@
 // Values defined by the SRS (FR-03, 3.3, 3.5.3).
+// CATEGORIES / ITEM_STATUSES / ROLES are duplicated in db/schema.sql and client/src/types.ts: change all three.
 export const CATEGORIES = [
   "Electronics",
   "Wallet/Card",

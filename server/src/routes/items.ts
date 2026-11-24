@@ -155,23 +155,42 @@ router.post("/", requireAuth, uploadImage, async (req, res) => {
     const it = parseBody(itemCreateInput, req.body, res);
     if (it === null) return;
 
-    // FR-02: a deleted center no longer takes new items, so insert only while the center is active.
-    const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO item (center_id, registered_by, name, category, found_date, found_location, description, image, status)
-       SELECT center_id, ?, ?, ?, ?, POINT(?, ?), ?, ?, 'Available'
-       FROM center WHERE center_id = ? AND deleted_at IS NULL`,
-      [
-        user.id, it.name, it.category, it.foundDate, it.foundLng, it.foundLat, it.description,
-        file?.filename ?? null, user.centerId,
-      ],
-    );
-    if (result.affectedRows === 0) {
-      res.status(409).json({ error: "Your assigned center has been deleted. Ask an administrator to reassign you." });
-      return;
+    // The item and its first status history row are saved together or not at all (3.4.1).
+    let itemId: number;
+    const conn = await pool.getConnection();
+    let committed = false;
+    try {
+      await conn.beginTransaction();
+      // FR-02: a deleted center no longer takes new items, so insert only while the center is active.
+      const [result] = await conn.query<ResultSetHeader>(
+        `INSERT INTO item (center_id, registered_by, name, category, found_date, found_location, description, image, status)
+         SELECT center_id, ?, ?, ?, ?, POINT(?, ?), ?, ?, 'Available'
+         FROM center WHERE center_id = ? AND deleted_at IS NULL`,
+        [
+          user.id, it.name, it.category, it.foundDate, it.foundLng, it.foundLat, it.description,
+          file?.filename ?? null, user.centerId,
+        ],
+      );
+      if (result.affectedRows === 0) {
+        res.status(409).json({ error: "Your assigned center has been deleted. Ask an administrator to reassign you." });
+        return;
+      }
+      itemId = result.insertId;
+      // changed_at = registration_date, so both show the same time.
+      await conn.query(
+        `INSERT INTO item_status_history (item_id, from_status, to_status, changed_by, changed_at)
+         SELECT item_id, NULL, 'Available', registered_by, registration_date FROM item WHERE item_id = ?`,
+        [itemId],
+      );
+      await conn.commit();
+      committed = true;
+      saved = true;
+    } finally {
+      if (!committed) await conn.rollback();
+      conn.release();
     }
-    saved = true;
 
-    const [rows] = await pool.query<RowDataPacket[]>(`${ITEM_SELECT} WHERE i.item_id = ?`, [result.insertId]);
+    const [rows] = await pool.query<RowDataPacket[]>(`${ITEM_SELECT} WHERE i.item_id = ?`, [itemId]);
     res.status(201).json(rows[0]);
   } finally {
     if (file && !saved) await removeUpload(file.filename);
@@ -291,6 +310,13 @@ const changeStatus =
       } else {
         await conn.query("UPDATE item SET status = ? WHERE item_id = ?", [newStatus, id]);
       }
+      // Status history (2.1.4, FR-09): who changed the status and when, for every closed status.
+      // For Returned, changed_at = return_date so both show the same time.
+      await conn.query(
+        `INSERT INTO item_status_history (item_id, from_status, to_status, changed_by, changed_at)
+         SELECT item_id, 'Available', status, ?, COALESCE(return_date, NOW()) FROM item WHERE item_id = ?`,
+        [user.id, id],
+      );
       await conn.commit();
       committed = true;
     } finally {

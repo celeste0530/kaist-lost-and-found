@@ -1,4 +1,5 @@
 // Mirrors the SRS (FR-03, 3.3, 3.5.3) and the JSON returned by the server.
+// CATEGORIES / ItemStatus / Role must match server/src/constants.ts and db/schema.sql.
 export const CATEGORIES = [
   "Electronics",
   "Wallet/Card",

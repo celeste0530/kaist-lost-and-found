@@ -10,12 +10,15 @@ services:
       MYSQL_PASSWORD: lostfound
     ports:
       - "3306:3306"
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    # All DATETIME values (NOW(), CURRENT_TIMESTAMP, seed data) are Korea Standard Time.
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+09:00
     volumes:
       - db-data:/var/lib/mysql
       # Applied automatically only when the volume is created for the first time.
       # To re-apply: docker compose down -v && docker compose up -d
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Development sample data (centers, staff accounts, items). See db/seed.sql for the logins.
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
 volumes:
   db-data:

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json",
     "test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "perf": "tsx test/perf.ts",
     "create-admin": "tsx src/scripts/createAdmin.ts"
   },
   "dependencies": {

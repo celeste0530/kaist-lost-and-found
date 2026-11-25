@@ -30,6 +30,9 @@ CREATE TABLE staff_user (
   -- Required for role 'Staff' (FR-10), NULL allowed for 'Administrator'.
   -- This rule is enforced in the application (server), not with a CHECK constraint.
   center_id     INT          NULL,
+  -- FR-10: deactivating an account is a soft delete. Items and status history keep referring to the row,
+  -- so it cannot be deleted; a deactivated account cannot log in. NULL = active.
+  deactivated_at DATETIME    NULL,
   PRIMARY KEY (user_id),
   UNIQUE KEY uq_staff_user_email (email),
   CONSTRAINT fk_staff_user_center FOREIGN KEY (center_id) REFERENCES center (center_id)

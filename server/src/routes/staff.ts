@@ -1,13 +1,18 @@
 import bcrypt from "bcryptjs";
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { z } from "zod";
 import { pool } from "../db";
 import { requireAdmin } from "../middleware/auth";
 import { parseBody, parseId } from "../utils";
+
 const router = Router();
+
+// Never select password_hash here: these rows go straight into API responses (SRS 3.1).
+// deactivatedAt is null for an active account.
 const STAFF_SELECT = `
-  SELECT user_id AS id, email, display_name AS displayName, role, center_id AS centerId
+  SELECT user_id AS id, email, display_name AS displayName, role, center_id AS centerId,
+         deactivated_at AS deactivatedAt
   FROM staff_user`;
 
 // FR-10: a staff account needs an email, a password, a display name and exactly one center.
@@ -100,5 +105,44 @@ router.put("/:id", requireAdmin, async (req, res) => {
   const [rows] = await pool.query<RowDataPacket[]>(`${STAFF_SELECT} WHERE user_id = ?`, [id]);
   res.json(rows[0]);
 });
+
+// FR-10: an administrator deactivates or reactivates a Staff account (administrator accounts: 404).
+// The row is never deleted because items and status history refer to it. A deactivated account
+// cannot log in, and an existing login stops working on its next request (see attachUser).
+const setDeactivated =
+  (deactivate: boolean): RequestHandler =>
+  async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+      res.status(404).json({ error: "Staff account not found." });
+      return;
+    }
+
+    // One statement: the current-state check and the change cannot be split by another request.
+    const [result] = await pool.query<ResultSetHeader>(
+      deactivate
+        ? "UPDATE staff_user SET deactivated_at = NOW() WHERE user_id = ? AND role = 'Staff' AND deactivated_at IS NULL"
+        : "UPDATE staff_user SET deactivated_at = NULL WHERE user_id = ? AND role = 'Staff' AND deactivated_at IS NOT NULL",
+      [id],
+    );
+
+    if (result.affectedRows === 0) {
+      // Nothing changed: either there is no such Staff account, or it is already in that state.
+      const [rows] = await pool.query<RowDataPacket[]>(`${STAFF_SELECT} WHERE user_id = ? AND role = 'Staff'`, [id]);
+      if (rows[0]) {
+        const error = deactivate ? "This staff account is already deactivated." : "This staff account is already active.";
+        res.status(409).json({ error });
+      } else {
+        res.status(404).json({ error: "Staff account not found." });
+      }
+      return;
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(`${STAFF_SELECT} WHERE user_id = ?`, [id]);
+    res.json(rows[0]);
+  };
+
+router.post("/:id/deactivate", requireAdmin, setDeactivated(true));
+router.post("/:id/activate", requireAdmin, setDeactivated(false));
 
 export default router;

@@ -40,7 +40,8 @@ export function signToken(userId: number): string {
 /**
  * Attaches req.user when a valid login cookie is present; never rejects the request.
  * The user is re-read from the database on every request so that role / center changes
- * made by an administrator (FR-10) take effect immediately (SRS 3.4.3).
+ * made by an administrator (FR-10) take effect immediately (SRS 3.4.3). A deactivated account is
+ * treated as a public user, so an existing login stops working on its next request.
  */
 export const attachUser: RequestHandler = async (req, _res, next) => {
   const token: string | undefined = req.cookies?.[AUTH_COOKIE];
@@ -54,7 +55,7 @@ export const attachUser: RequestHandler = async (req, _res, next) => {
   }
   if (userId !== undefined) {
     const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT user_id, email, display_name, role, center_id FROM staff_user WHERE user_id = ?",
+      "SELECT user_id, email, display_name, role, center_id FROM staff_user WHERE user_id = ? AND deactivated_at IS NULL",
       [userId],
     );
     if (rows[0]) req.user = toAuthUser(rows[0]);

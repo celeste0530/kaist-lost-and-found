@@ -20,7 +20,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 - JSON 키는 camelCase입니다 (`operatingHours`, `foundDate`).
 - 좌표는 숫자 두 개 `lat`(위도, -90~90), `lng`(경도, -180~180)로 주고받습니다.
 - 날짜: `DATE`는 `"YYYY-MM-DD"`, `DATETIME`은 `"YYYY-MM-DD HH:MM:SS"` 문자열입니다.
-  - ⚠️ 현재 개발용 MySQL 컨테이너의 시간대가 UTC라서, `DATETIME` 값(등록일, 반환일 등)은 한국 시각보다 9시간 이릅니다. 처리 방식은 아직 팀에서 정하지 않았습니다.
+  - 모든 `DATETIME` 값(등록일, 반환일 등)은 한국 시간(KST, `+09:00`)입니다. MySQL 서버를 `--default-time-zone=+09:00`으로 실행하기 때문입니다(`docker-compose.yml` 참고). 배포용 DB도 같은 설정이어야 합니다.
 
 ### 인증
 
@@ -86,6 +86,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 |------|--------|
 | 400 | `Enter a valid email address and password.` |
 | 401 | `Incorrect email or password.` (이메일이 없을 때와 비밀번호가 틀릴 때 같은 메시지) |
+| 403 | `This account has been deactivated.` 비밀번호가 맞을 때만 응답하므로, 비밀번호를 모르는 사람은 계정 상태를 알 수 없음 |
 
 ### `POST /api/auth/logout` — Public
 
@@ -93,7 +94,7 @@ Express 서버(`server/`)가 제공하는 REST API 목록입니다. 프런트엔
 
 ### `GET /api/auth/me` — Staff
 
-현재 로그인한 사용자 정보. 응답 형식은 로그인과 같습니다. 로그인하지 않았으면 **401**.
+현재 로그인한 사용자 정보. 응답 형식은 로그인과 같습니다. 로그인하지 않았거나, 로그인한 뒤 계정이 비활성화됐으면 **401**.
 
 - `role`: `"Staff"` 또는 `"Administrator"`
 - `centerId`: 직원의 배정 센터. 관리자는 `null`일 수 있습니다.
@@ -324,7 +325,6 @@ const item = await api(`/items/${id}`, { method: "PUT", body: form });
 - 반환일(`return_date`)과 처리한 직원(`returned_by`)이 기록됩니다 (FR-08). 이 값은 `Item` 응답에는 포함되지 않습니다.
 - 기록은 남습니다. `Returned` 물품은 공개 검색과 지도에서 사라지고 공개 상세 조회는 404가 되지만, 직원은 `GET /api/items?status=Returned`로 찾아서 상세를 볼 수 있습니다.
 - 상태 변경은 행 잠금을 건 트랜잭션으로 처리되어, 같은 물품을 동시에 두 번 처리하면 한 요청만 성공하고 다른 요청은 409를 받습니다 (3.4.1).
-- ⚠️ `return_date`는 DB 시간대로 저장됩니다 (현재 UTC. 공통 규칙의 날짜 설명 참고).
 
 ```js
 const item = await api(`/items/${id}/return`, { method: "POST" });
@@ -373,10 +373,10 @@ const item = await api(`/items/${id}/dispose`, { method: "POST" }); // 또는 `/
 
 ### Staff 객체
 
-로그인 응답과 같은 모양입니다. 비밀번호 해시는 절대 포함되지 않습니다 (SRS 3.1).
+로그인 응답의 필드에 `deactivatedAt`이 추가된 모양입니다. 비밀번호 해시는 절대 포함되지 않습니다 (SRS 3.1).
 
 ```json
-{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3 }
+{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3, "deactivatedAt": null }
 ```
 
 | 필드 | 타입 | 규칙 |
@@ -387,10 +387,11 @@ const item = await api(`/items/${id}/dispose`, { method: "POST" }); // 또는 `/
 | `displayName` | string | 앞뒤 공백 제거 후 1~100자 |
 | `role` | `"Staff"` \| `"Administrator"` | **응답 전용.** 이 API로 만든 계정은 항상 `Staff` |
 | `centerId` | number \| null | 배정 센터. `Staff`는 필수이며 삭제되지 않은 센터여야 함. 관리자는 `null` |
+| `deactivatedAt` | string \| null | **응답 전용.** 활성 계정은 `null`, 비활성 계정은 비활성화된 시각 (`"YYYY-MM-DD HH:MM:SS"`, KST) |
 
 - 비밀번호 길이 규칙(8~72자)은 SRS에 정의되어 있지 않습니다. 최소값은 `create-admin` 스크립트와 맞췄고, 72는 bcrypt의 입력 한계입니다.
 - 관리자 계정은 이 API가 아니라 `npm run create-admin`으로 만듭니다 (README 참고).
-- 직원 계정 비활성화·삭제는 아직 구현되지 않았습니다.
+- 직원 계정은 삭제하지 않고 비활성화만 합니다(아래 참고). 물품과 상태 이력이 계속 그 계정을 참조하기 때문입니다.
 
 ### `GET /api/staff` — Admin
 
@@ -436,3 +437,24 @@ const item = await api(`/items/${id}/dispose`, { method: "POST" }); // 또는 `/
 | 400 | 입력값 오류, 또는 `centerId`가 살아 있는 센터가 아님 |
 | 401 / 403 | 로그인 안 함 / 관리자가 아님 |
 | 404 | 해당 id의 `Staff` 계정이 없음 (관리자 계정 포함), 또는 `:id`가 양의 정수가 아님 |
+
+### `POST /api/staff/:id/deactivate`, `POST /api/staff/:id/activate` — Admin
+
+`Staff` 계정을 비활성화하거나 다시 활성화합니다. 요청 본문은 없습니다. 관리자 계정은 바꿀 수 없습니다 (404).
+
+- 비활성 계정은 로그인할 수 없고(`POST /api/auth/login`이 403), 이미 로그인한 상태라면 다음 요청부터 로그인하지 않은 것으로 처리됩니다(401).
+- 계정 행은 남아 있으므로, 그 계정이 등록한 물품과 남긴 상태 이력은 그대로입니다. 비활성 계정도 `PUT /api/staff/:id`로 수정할 수 있고, 그 이메일로 새 계정을 만들 수는 없습니다.
+- `activate`는 비활성화를 되돌립니다. 기존 비밀번호로 다시 로그인할 수 있습니다.
+- 비활성화는 센터 삭제처럼 소프트 삭제입니다(`staff_user`의 `deactivated_at`). 이 칸은 SRS 3.3 표에는 없습니다. 다른 테이블이 직원 행을 참조하고 있어서 행을 지울 수 없기 때문에 추가했습니다.
+
+```js
+const staff = await api(`/staff/${id}/deactivate`, { method: "POST" }); // 또는 `/staff/${id}/activate`
+```
+
+**200** + 변경된 `Staff` (`deactivatedAt`이 채워지거나 다시 `null`)
+
+| 실패 | 경우 |
+|------|------|
+| 401 / 403 | 로그인 안 함 / 관리자가 아님 |
+| 404 | 해당 id의 `Staff` 계정이 없음 (관리자 계정 포함), 또는 `:id`가 양의 정수가 아님: `Staff account not found.` |
+| 409 | 이미 그 상태임: `This staff account is already deactivated.` / `This staff account is already active.` |

@@ -15,11 +15,11 @@ SRS v1.1 요구사항을 API / 화면 / 코드 위치에 매핑한 표와, 스�
 | FR-07 지도 | `GET /api/items`, `GET /api/centers` | LostItemMap | `client/src/pages/LostItemMap.tsx` | 구현 | 기본 구현 (마커 겹침 TODO) |
 | FR-08 반환 | `POST /api/items/:id/return` | CenterInventory | `server/src/routes/items.ts` | 구현 (상태 이력 기록) | TODO |
 | FR-09 삭제/폐기 | `POST /api/items/:id/remove`, `/dispose` | CenterInventory | `server/src/routes/items.ts` | 구현 (상태 이력 기록) | TODO |
-| FR-10 관리자 | `/api/staff`, `/api/centers` | AdminPage | `server/src/routes/staff.ts` | 일부 (직원 비활성화 TODO) | TODO |
+| FR-10 관리자 | `/api/staff`, `/api/centers` | AdminPage | `server/src/routes/staff.ts` | 구현 (직원 비활성화 포함) | TODO |
 
 ## 권장 구현 순서
 
-서버 API(FR-01 ~ FR-10)는 직원 비활성화를 빼고 구현되어 있습니다. 남은 작업은 주로 화면입니다.
+서버 API(FR-01 ~ FR-10)는 구현되어 있습니다. 남은 작업은 주로 화면입니다.
 
 1. ItemForm: FR-03 등록 + FR-04 수정 (이미지 업로드, 지도에서 위치 선택)
 2. CenterInventory: 자기 센터 물품 목록 + FR-08 반환 / FR-09 삭제·폐기
@@ -39,3 +39,4 @@ SRS v1.1 요구사항을 API / 화면 / 코드 위치에 매핑한 표와, 스�
 8. **이미지 저장** — 서버의 `UPLOAD_DIR`(기본 `server/uploads`)에 파일로 저장하고 DB에는 파일명만 저장합니다. 배포 환경에서 디스크가 휘발성이면 별도 저장소가 필요합니다.
 9. **센터 정보의 `closure_information`** — FR-02는 "운영 정보 필수"라고 하여 `operating_hours`는 NOT NULL, 휴무 정보는 NULL 허용으로 했습니다.
 10. **관리자의 물품 등록 (FR-03)** — **관리자는 물품을 등록할 수 없습니다** (403). FR-03은 등록 주체를 "Authorized center staff"로, 보관 센터를 "직원의 배정 센터로 자동 지정, 수정 불가"로 정하고 있습니다. 반환·삭제·폐기(FR-08/09)는 "staff or an administrator"라고 관리자를 명시하지만 FR-03에는 그런 표현이 없고, FR-10의 관리자 권한 목록에도 등록은 없습니다. 보안 요구사항에도 "Only authorized center staff can register or update items"라고 되어 있습니다.
+11. **직원 계정 비활성화 (FR-10)** — 물품(`registered_by`, `returned_by`)과 상태 이력(`changed_by`)이 직원 행을 참조하므로 직원 계정은 삭제하지 않고, 센터와 같은 방식의 소프트 삭제로 `staff_user.deactivated_at`을 추가했습니다(NULL = 활성). SRS 3.3 표에는 없는 컬럼입니다. 비활성 계정은 로그인할 수 없고, 이미 로그인한 세션도 다음 요청부터 막힙니다.

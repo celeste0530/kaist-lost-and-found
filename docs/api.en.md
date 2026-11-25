@@ -20,7 +20,7 @@ REST API served by the Express server (`server/`). Request/response formats and 
 - JSON keys are camelCase (`operatingHours`, `foundDate`).
 - Coordinates are exchanged as two numbers: `lat` (latitude, -90 to 90) and `lng` (longitude, -180 to 180).
 - Dates: `DATE` values are `"YYYY-MM-DD"` strings, `DATETIME` values are `"YYYY-MM-DD HH:MM:SS"` strings.
-  - ⚠️ The development MySQL container currently runs in UTC, so `DATETIME` values (registration date, return date, …) are 9 hours behind Korean time. How to handle this is still to be decided by the team.
+  - All `DATETIME` values (registration date, return date, …) are Korea Standard Time (KST, `+09:00`): the MySQL server runs with `--default-time-zone=+09:00` (see `docker-compose.yml`). A deployed database must use the same setting.
 
 ### Authentication
 
@@ -86,6 +86,7 @@ Checks that the server is running.
 |---------|---------|
 | 400 | `Enter a valid email address and password.` |
 | 401 | `Incorrect email or password.` (same message for an unknown email and a wrong password) |
+| 403 | `This account has been deactivated.` Only returned when the password is correct, so the account state is not revealed to someone who does not know it |
 
 ### `POST /api/auth/logout` — Public
 
@@ -93,7 +94,7 @@ Clears the cookie. **204** (no body)
 
 ### `GET /api/auth/me` — Staff
 
-The currently logged-in user, in the same format as the login response. **401** when not logged in.
+The currently logged-in user, in the same format as the login response. **401** when not logged in, or when the account has been deactivated since logging in.
 
 - `role`: `"Staff"` or `"Administrator"`
 - `centerId`: the staff member's assigned center. May be `null` for administrators.
@@ -324,7 +325,6 @@ Marks an `Available` item as `Returned`, after the center has verified the owner
 - The return date (`return_date`) and the staff user who did it (`returned_by`) are recorded (FR-08). They are not included in the `Item` response.
 - The record is kept. A `Returned` item disappears from public search and the map and returns 404 on public details, but staff can still find it with `GET /api/items?status=Returned` and open its details.
 - The status change runs in a transaction with a row lock, so when two requests mark the same item at the same time, one succeeds and the other gets 409 (3.4.1).
-- ⚠️ `return_date` is stored in the database's time zone (currently UTC; see the date note under Common rules).
 
 ```js
 const item = await api(`/items/${id}/return`, { method: "POST" });
@@ -373,10 +373,10 @@ All staff APIs are **Admin** only, so staff members cannot change their own assi
 
 ### Staff object
 
-Same shape as the login response. The password hash is never included (SRS 3.1).
+The login response fields plus `deactivatedAt`. The password hash is never included (SRS 3.1).
 
 ```json
-{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3 }
+{ "id": 2, "email": "kim@example.com", "displayName": "Kim Minsu", "role": "Staff", "centerId": 3, "deactivatedAt": null }
 ```
 
 | Field | Type | Rules |
@@ -387,10 +387,11 @@ Same shape as the login response. The password hash is never included (SRS 3.1).
 | `displayName` | string | 1–100 characters after trimming |
 | `role` | `"Staff"` \| `"Administrator"` | **Response only.** Accounts created through this API are always `Staff` |
 | `centerId` | number \| null | Assigned center. Required for `Staff` and must be an active (not deleted) center. `null` for administrators |
+| `deactivatedAt` | string \| null | **Response only.** `null` for an active account; otherwise when it was deactivated (`"YYYY-MM-DD HH:MM:SS"`, KST) |
 
 - The password length rule (8–72) is not defined by the SRS: the minimum matches the `create-admin` script, and 72 is bcrypt's input limit.
 - Administrator accounts are created with `npm run create-admin` (see README), not through this API.
-- Deactivating or deleting staff accounts is not implemented yet.
+- Staff accounts are never deleted, only deactivated (see below): items and status history keep referring to the account.
 
 ### `GET /api/staff` — Admin
 
@@ -436,3 +437,24 @@ Renames a staff member, moves them to another active center, and optionally rese
 | 400 | Invalid input, or `centerId` is not an active center |
 | 401 / 403 | Not logged in / not an administrator |
 | 404 | No `Staff` account with this id (including administrator accounts), or `:id` is not a positive integer |
+
+### `POST /api/staff/:id/deactivate`, `POST /api/staff/:id/activate` — Admin
+
+Deactivates or reactivates a `Staff` account. No request body. Administrator accounts cannot be changed (404).
+
+- A deactivated account cannot log in (`POST /api/auth/login` returns 403), and an existing login stops working on its next request (it is treated as not logged in, 401).
+- The account row is kept, so the items it registered and the status history it wrote stay intact. A deactivated account can still be edited with `PUT /api/staff/:id`, and its email cannot be reused for a new account.
+- `activate` reverses a deactivation; the account can log in again with its current password.
+- Deactivating is a soft delete, like deleting a center (`deactivated_at` in `staff_user`). This column is not in the SRS 3.3 table: staff rows cannot be deleted because other tables refer to them.
+
+```js
+const staff = await api(`/staff/${id}/deactivate`, { method: "POST" }); // or `/staff/${id}/activate`
+```
+
+**200** + the updated `Staff` (`deactivatedAt` set, or back to `null`)
+
+| Failure | When |
+|---------|------|
+| 401 / 403 | Not logged in / not an administrator |
+| 404 | No `Staff` account with this id (including administrator accounts), or `:id` is not a positive integer: `Staff account not found.` |
+| 409 | Already in that state: `This staff account is already deactivated.` / `This staff account is already active.` |

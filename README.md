@@ -83,11 +83,25 @@ npm run dev                                                 # http://localhost:5
 - 시드 없이 직접 데이터를 넣으려면: 관리자 계정으로 센터(`POST /api/centers`)와 직원 계정(`POST /api/staff`)을 만든 뒤, 직원 계정으로 로그인해 물품(`POST /api/items`)을 등록합니다. 요청 형식은 [API 명세](docs/api.en.md)를 참고하세요.
 - 업로드된 이미지는 `server/uploads/`에 저장됩니다(git에는 올라가지 않음).
 
+### 테스트
+
+서버 API를 실제 HTTP 요청으로 확인하는 자동 테스트입니다(SRS 3.7.2 테스트 케이스 10개 포함). Docker의 MySQL이 실행 중이어야 합니다.
+
+```bash
+cd server
+npm test
+```
+
+- 테스트는 같은 MySQL 안의 **별도 DB `lostfound_test`**를 매번 `db/schema.sql` + `db/seed.sql`로 새로 만들어 사용합니다. 개발용 DB(`lostfound`)와 `server/uploads/`는 건드리지 않습니다(업로드는 임시 폴더 사용).
+- 테스트 DB를 만들기 위해 MySQL root 계정을 씁니다(기본값은 `docker-compose.yml`의 개발용 비밀번호, 다르면 `TEST_DB_ROOT_PASSWORD` 환경 변수).
+- 테스트는 시드 데이터(계정, 물품 번호와 상태)를 전제로 합니다. `db/seed.sql`을 바꾸면 `server/test/`의 테스트도 함께 확인해 주세요.
+- 테스트 코드의 타입 검사: `npm run typecheck:test`
+
 ## 구현 현황
 
 | FR | 내용 | API | 화면 |
 |----|------|-----|------|
-| FR-01 | 직원 로그인/로그아웃 | 구현됨 | 구현됨 |
+| FR-01 | 직원 로그인/로그아웃 | 구현됨 |
 | FR-02 | 센터 관리 | 구현됨 (생성/수정/삭제, 삭제는 소프트 삭제 + Available 물품 있으면 거절) | 조회만 (AdminPage TODO) |
 | FR-03 | 습득물 등록 | 구현됨 (센터에 배정된 직원만, 이미지 JPG/PNG 10MB 선택, 보관 센터는 직원의 배정 센터로 자동 지정) | TODO (ItemForm) |
 | FR-04 | 습득물 수정 | 구현됨 (Available 물품만, 직원은 자기 센터 물품, 관리자는 모든 센터 물품. 이미지 교체/유지/삭제) | TODO (ItemForm) |

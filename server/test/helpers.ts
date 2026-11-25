@@ -13,11 +13,17 @@ import os from "node:os";
 import path from "node:path";
 import mysql from "mysql2/promise";
 
+// Any MySQL 8 server works, not only the Docker one. The defaults match docker-compose.yml;
+// override them with environment variables for another server (see README "테스트").
 const TEST_DB = process.env.TEST_DB_NAME ?? "lostfound_test";
-// Matches MYSQL_ROOT_PASSWORD in docker-compose.yml (local development only).
-const ROOT_PASSWORD = process.env.TEST_DB_ROOT_PASSWORD ?? "rootpassword";
 const DB_HOST = process.env.DB_HOST ?? "localhost";
 const DB_PORT = Number(process.env.DB_PORT ?? 3306);
+// An account that may create / drop databases and grant privileges (MYSQL_ROOT_PASSWORD in docker-compose.yml).
+const ADMIN_USER = process.env.TEST_DB_ADMIN_USER ?? "root";
+const ADMIN_PASSWORD = process.env.TEST_DB_ADMIN_PASSWORD ?? process.env.TEST_DB_ROOT_PASSWORD ?? "rootpassword";
+// The account the server itself uses (DB_USER in .env), and the host part of that MySQL account.
+const APP_USER = process.env.DB_USER ?? "lostfound";
+const APP_USER_HOST = process.env.TEST_DB_GRANT_HOST ?? "%";
 
 export const UPLOAD_DIR = path.join(os.tmpdir(), "lostfound-test-uploads");
 
@@ -39,14 +45,17 @@ export async function resetDatabase(): Promise<void> {
   const root = await mysql.createConnection({
     host: DB_HOST,
     port: DB_PORT,
-    user: "root",
-    password: ROOT_PASSWORD,
+    user: ADMIN_USER,
+    password: ADMIN_PASSWORD,
     multipleStatements: true,
   });
   try {
     await root.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\``);
     await root.query(`CREATE DATABASE \`${TEST_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
-    await root.query(`GRANT ALL PRIVILEGES ON \`${TEST_DB}\`.* TO 'lostfound'@'%'`);
+    // Let the server's own account use the test database (not needed when both are the same account).
+    if (APP_USER !== ADMIN_USER) {
+      await root.query(`GRANT ALL PRIVILEGES ON \`${TEST_DB}\`.* TO ?@?`, [APP_USER, APP_USER_HOST]);
+    }
     await root.query(`USE \`${TEST_DB}\``);
     await root.query(fs.readFileSync(path.join(DB_DIR, "schema.sql"), "utf8"));
     await root.query(fs.readFileSync(path.join(DB_DIR, "seed.sql"), "utf8"));
@@ -62,8 +71,8 @@ export async function dbQuery<T = Record<string, unknown>>(sql: string, params: 
   const conn = await mysql.createConnection({
     host: DB_HOST,
     port: DB_PORT,
-    user: "root",
-    password: ROOT_PASSWORD,
+    user: ADMIN_USER,
+    password: ADMIN_PASSWORD,
     database: TEST_DB,
     dateStrings: true,
   });

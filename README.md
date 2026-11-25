@@ -85,7 +85,7 @@ npm run dev                                                 # http://localhost:5
 
 ### 테스트
 
-서버 API를 실제 HTTP 요청으로 확인하는 자동 테스트입니다(SRS 3.7.2 테스트 케이스 10개 포함). Docker의 MySQL이 실행 중이어야 합니다.
+서버 API를 실제 HTTP 요청으로 확인하는 자동 테스트입니다(SRS 3.7.2 테스트 케이스 10개 포함). MySQL 8 서버가 실행 중이어야 합니다. 기본값은 이 저장소의 Docker MySQL에 맞춰져 있어서, Docker를 쓰면 설정 없이 바로 실행됩니다.
 
 ```bash
 cd server
@@ -93,7 +93,19 @@ npm test
 ```
 
 - 테스트는 같은 MySQL 안의 **별도 DB `lostfound_test`**를 매번 `db/schema.sql` + `db/seed.sql`로 새로 만들어 사용합니다. 개발용 DB(`lostfound`)와 `server/uploads/`는 건드리지 않습니다(업로드는 임시 폴더 사용).
-- 테스트 DB를 만들기 위해 MySQL root 계정을 씁니다(기본값은 `docker-compose.yml`의 개발용 비밀번호, 다르면 `TEST_DB_ROOT_PASSWORD` 환경 변수).
+- 테스트 DB를 만들고 지우기 위해 MySQL 관리자 계정을 씁니다. Docker가 아닌 MySQL(직접 설치, CI 등)에서는 아래 환경 변수로 맞춰 주세요.
+
+  | 환경 변수 | 기본값 | 의미 |
+  |-----------|--------|------|
+  | `DB_HOST`, `DB_PORT` | `localhost`, `3306` | MySQL 서버 주소 |
+  | `TEST_DB_ADMIN_USER` | `root` | DB를 만들고 권한을 줄 수 있는 계정 |
+  | `TEST_DB_ADMIN_PASSWORD` | `rootpassword` (`docker-compose.yml`) | 그 계정의 비밀번호 |
+  | `DB_USER`, `DB_PASSWORD` | `lostfound`, `lostfound` (`.env`) | 서버가 접속하는 계정 (미리 만들어져 있어야 함) |
+  | `TEST_DB_GRANT_HOST` | `%` | 서버 계정의 호스트 부분. 계정이 `'lostfound'@'localhost'`로 만들어졌다면 `localhost` |
+  | `TEST_DB_NAME` | `lostfound_test` | 테스트용 DB 이름 (매번 지우고 새로 만듦) |
+
+  예 (PowerShell): `$env:TEST_DB_ADMIN_PASSWORD = "내 root 비밀번호"; $env:TEST_DB_GRANT_HOST = "localhost"; npm test`
+- MySQL 8이 필요합니다(`utf8mb4_0900_ai_ci` 정렬 규칙과 공간 함수 사용). MariaDB나 MySQL 5.7은 지원하지 않습니다.
 - 테스트는 시드 데이터(계정, 물품 번호와 상태)를 전제로 합니다. `db/seed.sql`을 바꾸면 `server/test/`의 테스트도 함께 확인해 주세요.
 - 테스트 코드의 타입 검사: `npm run typecheck:test`
 

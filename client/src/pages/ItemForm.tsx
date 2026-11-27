@@ -6,6 +6,19 @@ import LocationPicker, { type LatLng } from "../components/LocationPicker";
 import { CATEGORIES, type Category, type Center, type Item } from "../types";
 import { imageProblem, todayInKorea } from "../util";
 
+type Field = "name" | "category" | "foundDate" | "location" | "description";
+
+// The server answers 400 with "<field>: <reason>" (server/src/utils.ts parseBody).
+const SERVER_FIELDS: Record<string, Field | "image"> = {
+  name: "name",
+  category: "category",
+  foundDate: "foundDate",
+  foundLat: "location",
+  foundLng: "location",
+  description: "description",
+  image: "image",
+};
+
 // FR-03 (register) and FR-04 (edit). Routes: /staff/items/new and /staff/items/:id/edit.
 // The storage center is not an input: the server always uses the staff member's own center (FR-03).
 export default function ItemForm() {
@@ -29,8 +42,18 @@ export default function ItemForm() {
   const [imageError, setImageError] = useState("");
   const [removeImage, setRemoveImage] = useState(false);
 
+  // SRS 3.1: each problem is shown next to its field; `error` is for problems that belong to no field.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  /** Wraps a setter so that changing a field clears its message (the form is checked again on submit). */
+  const edited =
+    <T,>(field: Field, set: (v: T) => void) =>
+    (v: T) => {
+      set(v);
+      setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+    };
 
   // Edit mode: load the current values.
   useEffect(() => {
@@ -118,13 +141,18 @@ export default function ItemForm() {
     e.preventDefault();
     setError("");
 
-    // Same checks as the server, so the message appears before anything is sent (SRS 3.1).
-    if (!name.trim()) return setError("Enter the item name.");
-    if (!category) return setError("Choose a category.");
-    if (!foundDate) return setError("Enter the date the item was found.");
-    if (foundDate > todayInKorea()) return setError("The found date cannot be in the future.");
-    if (!location) return setError("Choose the place where the item was found on the map.");
-    if (!description.trim()) return setError("Enter a description.");
+    // Same checks as the server, so the messages appear before anything is sent (SRS 3.1).
+    // Every problem is reported at once, not only the first one.
+    const problems: Partial<Record<Field, string>> = {};
+    if (!name.trim()) problems.name = "Enter the item name.";
+    if (!category) problems.category = "Choose a category.";
+    if (!foundDate) problems.foundDate = "Enter the date the item was found.";
+    else if (foundDate > todayInKorea()) problems.foundDate = "The found date cannot be in the future.";
+    if (!location) problems.location = "Choose the place where the item was found on the map.";
+    if (!description.trim()) problems.description = "Enter a description.";
+    setFieldErrors(problems);
+    // (!location / !category are already reported above; repeating them lets TypeScript narrow the types.)
+    if (Object.keys(problems).length > 0 || !location || !category) return;
 
     const form = new FormData();
     form.append("name", name.trim());
@@ -144,12 +172,19 @@ export default function ItemForm() {
       });
       navigate(`/items/${saved.id}`);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      const colon = message.indexOf(":");
+      const field = colon > 0 ? SERVER_FIELDS[message.slice(0, colon)] : undefined;
+      const reason = message.slice(colon + 1).trim();
+      if (field === "image") setImageError(reason);
+      else if (field) setFieldErrors({ [field]: reason });
+      else setError(message);
       setSaving(false);
     }
   };
 
   const currentImage = isEdit && original?.imageUrl && !removeImage && !file ? original.imageUrl : null;
+  const fieldError = (f: Field) => fieldErrors[f] && <span className="error field-error">{fieldErrors[f]}</span>;
 
   return (
     <section>
@@ -157,12 +192,22 @@ export default function ItemForm() {
       <form className="form form-wide" onSubmit={onSubmit} noValidate>
         <label>
           Item name *
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} />
+          <input
+            value={name}
+            onChange={(e) => edited("name", setName)(e.target.value)}
+            maxLength={255}
+            aria-invalid={!!fieldErrors.name}
+          />
+          {fieldError("name")}
         </label>
 
         <label>
           Category *
-          <select value={category} onChange={(e) => setCategory(e.target.value as Category | "")}>
+          <select
+            value={category}
+            onChange={(e) => edited("category", setCategory)(e.target.value as Category | "")}
+            aria-invalid={!!fieldErrors.category}
+          >
             <option value="">Choose…</option>
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
@@ -170,21 +215,36 @@ export default function ItemForm() {
               </option>
             ))}
           </select>
+          {fieldError("category")}
         </label>
 
         <label>
           Found date *
-          <input type="date" value={foundDate} max={todayInKorea()} onChange={(e) => setFoundDate(e.target.value)} />
+          <input
+            type="date"
+            value={foundDate}
+            max={todayInKorea()}
+            onChange={(e) => edited("foundDate", setFoundDate)(e.target.value)}
+            aria-invalid={!!fieldErrors.foundDate}
+          />
+          {fieldError("foundDate")}
         </label>
 
         <div>
           <div className="label-text">Found location * (click the map)</div>
-          <LocationPicker value={location} onChange={setLocation} />
+          <LocationPicker value={location} onChange={edited("location", setLocation)} />
+          {fieldError("location")}
         </div>
 
         <label>
           Description *
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+          <textarea
+            value={description}
+            onChange={(e) => edited("description", setDescription)(e.target.value)}
+            rows={4}
+            aria-invalid={!!fieldErrors.description}
+          />
+          {fieldError("description")}
         </label>
 
         <div>

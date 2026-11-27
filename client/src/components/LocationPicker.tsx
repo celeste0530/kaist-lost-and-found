@@ -1,4 +1,5 @@
-import { CircleMarker, MapContainer, useMapEvents } from "react-leaflet";
+import { useEffect } from "react";
+import { CircleMarker, MapContainer, useMap, useMapEvents } from "react-leaflet";
 import { KAIST_CENTER } from "../util";
 import BaseTiles from "./BaseTiles";
 
@@ -27,6 +28,17 @@ function ClickHandler({ onPick }: { onPick: (p: LatLng) => void }) {
   return null;
 }
 
+// Brings a selected point into view when it is outside the visible area: an item or center being edited
+// that is far from campus, or a different center chosen while the map stays open. A point chosen by
+// clicking is always visible, so clicking never moves the map.
+function KeepInView({ value }: { value: LatLng | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (value && !map.getBounds().contains([value.lat, value.lng])) map.setView([value.lat, value.lng]);
+  }, [map, value]);
+  return null;
+}
+
 /** Click the map to choose a location (FR-03: "the found location shall be chosen by the user on the map"). */
 export default function LocationPicker({
   value,
@@ -40,7 +52,7 @@ export default function LocationPicker({
   return (
     <div>
       <MapContainer
-        center={KAIST_CENTER}
+        center={value ? [value.lat, value.lng] : KAIST_CENTER}
         zoom={INITIAL_ZOOM}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
@@ -51,6 +63,7 @@ export default function LocationPicker({
       >
         <BaseTiles />
         <ClickHandler onPick={onChange} />
+        <KeepInView value={value} />
         {value && <CircleMarker center={[value.lat, value.lng]} radius={9} pathOptions={{ color }} />}
       </MapContainer>
       <p className="muted">

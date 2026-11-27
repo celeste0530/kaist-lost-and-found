@@ -60,6 +60,8 @@ label.inline { display: inline-flex; align-items: center; gap: 6px; }
 .form label { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .form input[type="file"] { width: 100%; }
 .form label.inline { display: inline-flex; }
+.field-error { font-size: 0.9rem; }
+[aria-invalid="true"] { border-color: #b42318; }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #ddd; margin: 12px 0; }
 .tab { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; }

@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { KAIST_CENTER, TILE_ATTRIBUTION, TILE_URL } from "../map";
 import type { Center, Item } from "../types";
-
-// Approximate center of the KAIST main campus.
-const KAIST_CENTER: [number, number] = [36.3721, 127.3604];
 
 // FR-07: Available items are drawn at their found location; centers are drawn in another color.
 // TODO: make overlapping / nearby markers distinguishable (clustering or spiderfy).
@@ -32,10 +30,7 @@ export default function LostItemMap() {
         <span style={{ color: "#1c5fd4" }}>●</span> lost-and-found center
       </p>
       <MapContainer center={KAIST_CENTER} zoom={16} className="map">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
         {centers.map((c) => (
           <CircleMarker key={`c${c.id}`} center={[c.lat, c.lng]} radius={9} pathOptions={{ color: "#1c5fd4" }}>
             <Popup>

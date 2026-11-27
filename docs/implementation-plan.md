@@ -8,8 +8,8 @@ SRS v1.1 요구사항을 API / 화면 / 코드 위치에 매핑한 표와, 스�
 |----|-----|------|------|----------|-----------|
 | FR-01 로그인 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | StaffLogin | `server/src/routes/auth.ts` | 구현 | 구현 |
 | FR-02 센터 관리 | `GET/POST/PUT/DELETE /api/centers` | CenterList, CenterDetails, AdminPage | `server/src/routes/centers.ts` | 구현 | 조회만 (AdminPage TODO) |
-| FR-03 등록 | `POST /api/items` | ItemForm | `server/src/routes/items.ts`, `middleware/upload.ts` | 구현 (상태 이력 기록) | TODO |
-| FR-04 수정 | `PUT /api/items/:id` | ItemForm | `server/src/routes/items.ts` | 구현 | TODO |
+| FR-03 등록 | `POST /api/items` | ItemForm | `server/src/routes/items.ts`, `middleware/upload.ts` | 구현 (상태 이력 기록) | 구현 |
+| FR-04 수정 | `PUT /api/items/:id` | ItemForm | `server/src/routes/items.ts` | 구현 | 구현 |
 | FR-05 검색/필터 | `GET /api/items` | LostItemList | `server/src/routes/items.ts` | 구현 | 키워드·카테고리만 (날짜·위치·센터 TODO) |
 | FR-06 상세 | `GET /api/items/:id` | ItemDetails | `server/src/routes/items.ts` | 구현 | 구현 |
 | FR-07 지도 | `GET /api/items`, `GET /api/centers` | LostItemMap | `client/src/pages/LostItemMap.tsx` | 구현 | 기본 구현 (마커 겹침 TODO) |

@@ -32,7 +32,7 @@ export default function App() {
           <Link to="/">Items</Link>
           <Link to="/map">Map</Link>
           <Link to="/centers">Centers</Link>
-          {user && <Link to="/staff/inventory">My Center</Link>}
+          {user?.role === "Staff" && <Link to="/staff/inventory">My Center</Link>}
           {user?.role === "Administrator" && <Link to="/admin">Admin</Link>}
           {user ? (
             <button onClick={() => void logout()}>Log out ({user.displayName})</button>

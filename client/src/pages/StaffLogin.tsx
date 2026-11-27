@@ -10,14 +10,17 @@ export default function StaffLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  if (user) return <Navigate to="/staff/inventory" replace />;
+  // Administrators land on their page, staff on their center's inventory.
+  const home = (role: string) => (role === "Administrator" ? "/admin" : "/staff/inventory");
+
+  if (user) return <Navigate to={home(user.role)} replace />;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     try {
       await login(email, password);
-      navigate("/staff/inventory");
+      // The user state change re-renders this page and the <Navigate> above takes over.
     } catch (err) {
       setError((err as Error).message);
     }

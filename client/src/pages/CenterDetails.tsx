@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
+import PointMap from "../components/PointMap";
 import type { Center } from "../types";
 
 // SRS 3.1: name, location, operating hours, closure information, contact information (if provided).
@@ -21,10 +22,11 @@ export default function CenterDetails() {
   return (
     <section>
       <h1>{center.name}</h1>
+      <PointMap points={[{ lat: center.lat, lng: center.lng, label: center.name, color: "#1c5fd4" }]} />
       <dl>
         <dt>Location</dt>
         <dd>
-          {center.lat.toFixed(5)}, {center.lng.toFixed(5)} (see the <Link to="/map">map</Link>)
+          {center.lat.toFixed(5)}, {center.lng.toFixed(5)} (see the <Link to="/map">campus map</Link>)
         </dd>
         <dt>Operating hours</dt>
         <dd>{center.operatingHours}</dd>
@@ -48,7 +50,7 @@ export default function CenterDetails() {
         )}
       </dl>
       <p>
-        <Link to="/">Browse items</Link> and filter by this center (TODO: center filter on the item list).
+        <Link to={`/?centerId=${center.id}`}>See the items stored at this center</Link>
       </p>
     </section>
   );

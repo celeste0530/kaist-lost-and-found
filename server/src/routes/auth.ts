@@ -23,7 +23,7 @@ router.post("/login", async (req, res) => {
   const { email, password } = parsed.data;
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    "SELECT user_id, email, password_hash, display_name, role, center_id FROM staff_user WHERE email = ?",
+    "SELECT user_id, email, password_hash, display_name, role, center_id, deactivated_at FROM staff_user WHERE email = ?",
     [email],
   );
   const row = rows[0];
@@ -31,6 +31,11 @@ router.post("/login", async (req, res) => {
   if (!row || !passwordOk) {
     // Same message for unknown email and wrong password.
     res.status(401).json({ error: "Incorrect email or password." });
+    return;
+  }
+  // FR-10: checked only after the password, so only the account owner learns that it is deactivated.
+  if (row.deactivated_at !== null) {
+    res.status(403).json({ error: "This account has been deactivated." });
     return;
   }
 

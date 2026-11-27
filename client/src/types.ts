@@ -11,7 +11,8 @@ export const CATEGORIES = [
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
-export type ItemStatus = "Available" | "Returned" | "Removed" | "Disposed";
+export const ITEM_STATUSES = ["Available", "Returned", "Removed", "Disposed"] as const;
+export type ItemStatus = (typeof ITEM_STATUSES)[number];
 export type Role = "Staff" | "Administrator";
 
 export interface Item {
@@ -46,4 +47,9 @@ export interface StaffUser {
   displayName: string;
   role: Role;
   centerId: number | null;
+}
+
+// Row of GET /api/staff (administrators only): the login fields plus the deactivation time.
+export interface StaffAccount extends StaffUser {
+  deactivatedAt: string | null; // null = active
 }

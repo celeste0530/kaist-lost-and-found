@@ -249,7 +249,7 @@ export default function ItemForm() {
 
         <div>
           <label>
-            Image (optional, JPG or PNG, up to 10 MB)
+            Image (JPG or PNG, up to 10 MB) *
             <input type="file" accept="image/jpeg,image/png" onChange={onFileChange} />
           </label>
           {imageError && <p className="error">{imageError}</p>}
